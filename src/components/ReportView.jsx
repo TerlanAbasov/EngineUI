@@ -136,7 +136,8 @@ export default function ReportView({ result }) {
             <div style={{ maxHeight: 320, overflow: "auto" }}>
               <table>
                 <thead>
-                  <tr><th>Symbol</th><th>Side</th><th>Entry</th><th>Exit</th><th>Bars</th><th>Return %</th></tr>
+                  <tr><th>Symbol</th><th>Side</th><th>Entry</th><th>Exit</th><th>Bars</th>
+                    <th title="Contribution to the portfolio's total return (each symbol is an equal 1/N sleeve)">Contrib %</th></tr>
                 </thead>
                 <tbody>
                   {(trades || []).slice(-40).reverse().map((t, i) => (
@@ -156,6 +157,7 @@ export default function ReportView({ result }) {
         </div>
         <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>
           Commission + slippage charged on every fill; signals executed next bar (no look-ahead).
+          Each trade's return is its contribution to the equal-weight portfolio, so the trades sum to the total return.
           Backtested results are not indicative of future performance.
         </p>
       </div>
