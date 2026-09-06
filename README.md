@@ -19,12 +19,21 @@ npm run build      # production bundle in dist/
 
 ## Tabs
 
-- **Backtest** — run one strategy or all enabled strategies (leaderboard), pick a
-  date range / capital / costs, view the per-strategy report (equity vs buy & hold,
-  drawdown, KPIs, trades).
-- **Strategies** — enable/disable each of the 31 strategies.
-- **Universe** — manage the stock list (add/remove tickers, pull data).
-- **Scanner** — current signals across enabled strategies.
+- **Backtest** — run one strategy, all enabled strategies (leaderboard), or a
+  market-neutral **pairs** backtest; pick a date range / capital / costs; view the
+  per-strategy report (equity vs buy & hold, drawdown, KPIs, trades). A **run
+  history** list reloads any saved run (`GET /api/backtests`).
+- **Strategies** — enable/disable each of the 100 strategies.
+- **Universe** — manage the stock list (add merges server-side via
+  `POST /api/universe`, remove replaces via `PUT`, plus data pull).
+- **Scanner** — current signals across enabled strategies. Loads the last
+  persisted signals (`GET /api/signals`) on open, and — when the backend has
+  `quantplat.execution-engine.base-url` set — can forward a LONG/SHORT row to
+  ExecutionEngine (`POST /api/execution/send`).
+
+All timestamps from the backend are ISO-8601 instants (since the
+bar-interval-timestamps migration) and are rendered as calendar dates, with the
+clock shown only for intraday bars.
 
 ## Docker
 

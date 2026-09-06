@@ -11,24 +11,29 @@ export default function UniverseEditor() {
   const load = () => api.universe().then(setSymbols).catch((e) => setErr(e.message));
   useEffect(() => { load(); }, []);
 
-  const save = async (next) => {
+  const add = async () => {
+    const parsed = input.split(/[,\s]+/).map((s) => s.trim().toUpperCase()).filter(Boolean);
+    if (!parsed.length) return;
+    setInput("");
     setBusy(true); setErr(null); setMsg(null);
     try {
-      const saved = await api.setUniverse(next);
+      // POST /api/universe merges server-side (addAll), avoiding a read/replace race.
+      const saved = await api.addUniverse(parsed);
       setSymbols(saved);
       setMsg("Universe saved.");
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 
-  const add = () => {
-    const parsed = input.split(/[,\s]+/).map((s) => s.trim().toUpperCase()).filter(Boolean);
-    if (!parsed.length) return;
-    const next = Array.from(new Set([...symbols, ...parsed])).sort();
-    setInput("");
-    save(next);
+  const remove = async (sym) => {
+    setBusy(true); setErr(null); setMsg(null);
+    try {
+      // DELETE /api/universe/{symbol} removes just this row server-side, avoiding the
+      // read/replace round-trip that collided with uk_universe_symbol.
+      const saved = await api.removeUniverse(sym);
+      setSymbols(saved);
+      setMsg("Universe saved.");
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
-
-  const remove = (sym) => save(symbols.filter((s) => s !== sym));
 
   const pull = async () => {
     if (!symbols.length) return;
@@ -44,8 +49,8 @@ export default function UniverseEditor() {
     <div className="panel">
       <h2 style={{ marginTop: 0 }}>Universe <span className="muted" style={{ fontSize: 13 }}>({symbols.length} symbols)</span></h2>
       <p className="muted" style={{ marginTop: 0 }}>
-        The stock list every strategy scans and backtests. Add your own tickers — they must be
-        resolvable by your active data source (any symbol works on synthetic; valid IB contracts on ib).
+        The stock list every strategy scans and backtests. Add your own tickers — each must be
+        a valid, Alpaca-tradable symbol.
       </p>
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         <input style={{ flex: 1 }} placeholder="Add tickers, e.g. AAPL, MSFT, TSLA"

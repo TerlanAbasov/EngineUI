@@ -2,18 +2,20 @@ import {
   LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, Legend,
 } from "recharts";
-import { fmt, cls, KPI_KEYS, TRADE_KEYS, downsample } from "../api/format";
+import { fmt, cls, fmtDate, KPI_KEYS, TRADE_KEYS, RISK_KEYS, LONGSHORT_ROWS, METRIC_HELP, downsample } from "../api/format";
 
 const AXIS = { stroke: "#8b949e", fontSize: 11 };
 const GRID = "#2a3441";
 
 export default function ReportView({ result }) {
   if (!result) return null;
-  const { strategy, symbols, start, end, metrics, dates, equity, benchmark, drawdown, trades } = result;
+  const { strategy, symbols, start, end, metrics, dates, equity, benchmark, drawdown, trades,
+          timeframe, bars } = result;
+  const m = metrics || {};
 
   const series = downsample(
     (dates || []).map((d, i) => ({
-      date: d,
+      date: fmtDate(d),
       equity: equity?.[i],
       benchmark: benchmark?.[i],
       drawdown: drawdown?.[i] != null ? drawdown[i] * 100 : null,
@@ -27,14 +29,58 @@ export default function ReportView({ result }) {
           <h2 style={{ margin: 0 }}>{strategy}</h2>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             <span className="tag">{symbols?.length} symbols</span>
-            <span className="tag">{start} → {end}</span>
+            <span className="tag">{fmtDate(start)} → {fmtDate(end)}</span>
+            {timeframe && <span className="tag">{timeframe === "NATIVE" ? "native bars" : timeframe}</span>}
+            {bars != null && <span className="tag">{bars} bars</span>}
             {result.runId != null && <span className="tag">run #{result.runId}</span>}
           </div>
         </div>
         <div className="kpis" style={{ marginTop: 14 }}>
           {KPI_KEYS.map(([k, label]) => (
-            <div className="kpi" key={k}>
-              <div className={`v ${cls(metrics?.[k])}`}>{fmt(metrics?.[k])}</div>
+            <div className="kpi" key={k} title={METRIC_HELP[k]}>
+              <div className={`v ${cls(m[k])}`}>{fmt(m[k])}</div>
+              <div className="l">{label}</div>
+            </div>
+          ))}
+        </div>
+        <p className="muted" style={{ fontSize: 12, margin: "8px 0 0" }}>
+          Returns are on starting capital (fixed position size, not compounded) — total return ≈ the sum of every trade's P&amp;L.
+        </p>
+      </div>
+
+      <div className="panel">
+        <h3 style={{ marginTop: 0 }}>Long vs Short</h3>
+        <table>
+          <thead>
+            <tr><th /><th style={{ textAlign: "right" }}>Long</th><th style={{ textAlign: "right" }}>Short</th></tr>
+          </thead>
+          <tbody>
+            {LONGSHORT_ROWS.map(([label, lk, sk, d]) => (
+              <tr key={label}>
+                <td className="muted">{label}</td>
+                <td className={cls(m[lk])} style={{ textAlign: "right" }}>{fmt(m[lk], d)}</td>
+                <td className={cls(m[sk])} style={{ textAlign: "right" }}>{fmt(m[sk], d)}</td>
+              </tr>
+            ))}
+            <tr>
+              <td className="muted">Avg bars held</td>
+              <td style={{ textAlign: "right" }}>{fmt(m.longAvgBarsHeld ?? m.avgBarsHeld, 1)}</td>
+              <td style={{ textAlign: "right" }}>{fmt(m.shortAvgBarsHeld ?? m.avgBarsHeld, 1)}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>
+          Operations = closed round-trips per side. Exposure = share of bars holding that side
+          (portfolio runs net long/short across symbols, so the split is approximate there).
+        </p>
+      </div>
+
+      <div className="panel">
+        <h3 style={{ marginTop: 0 }}>Risk &amp; Robustness</h3>
+        <div className="kpis">
+          {RISK_KEYS.map(([k, label]) => (
+            <div className="kpi" key={k} title={METRIC_HELP[k]}>
+              <div className="v">{fmt(m[k], k === "maxDrawdownDays" || k === "annTurnoverPct" ? 0 : 2)}</div>
               <div className="l">{label}</div>
             </div>
           ))}
@@ -78,9 +124,10 @@ export default function ReportView({ result }) {
             <h3 style={{ marginTop: 0 }}>Trade Quality</h3>
             <table>
               <tbody>
-                {TRADE_KEYS.map(([k, label]) => (
-                  <tr key={k}><td className="muted">{label}</td><td>{fmt(metrics?.[k], k === "trades" ? 0 : 2)}</td></tr>
-                ))}
+                {TRADE_KEYS.map(([k, label]) => {
+                  const d = ["trades", "maxWinStreak", "maxLossStreak"].includes(k) ? 0 : k === "tradesPerYear" ? 1 : 2;
+                  return <tr key={k} title={METRIC_HELP[k]}><td className="muted">{label}</td><td className={cls(k === "worstTradePct" ? -1 : k === "bestTradePct" ? 1 : 0)}>{fmt(metrics?.[k], d)}</td></tr>;
+                })}
               </tbody>
             </table>
           </div>
@@ -96,8 +143,8 @@ export default function ReportView({ result }) {
                     <tr key={i}>
                       <td>{t.symbol}</td>
                       <td><span className={`badge ${t.side}`}>{t.side}</span></td>
-                      <td className="muted">{t.entryDate}</td>
-                      <td className="muted">{t.exitDate}</td>
+                      <td className="muted">{fmtDate(t.entryDate)}</td>
+                      <td className="muted">{fmtDate(t.exitDate)}</td>
                       <td>{t.bars}</td>
                       <td className={cls(t.returnPct)}>{fmt(t.returnPct * 100)}</td>
                     </tr>
