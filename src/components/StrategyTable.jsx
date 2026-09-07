@@ -14,9 +14,19 @@ export default function StrategyTable() {
   const [cat, setCat] = useState("all");
   const [favOnly, setFavOnly] = useState(false);
   const [dayOnly, setDayOnly] = useState(true);    // day-trading strategies only
+  const [showArchived, setShowArchived] = useState(false);
 
-  const load = () => api.strategies().then(setRows).catch((e) => setErr(e.message));
-  useEffect(() => { load(); }, []);
+  const load = () => api.strategies({ includeArchived: showArchived }).then(setRows).catch((e) => setErr(e.message));
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [showArchived]);
+
+  const setArchived = async (name, archived, e) => {
+    e?.stopPropagation();
+    try {
+      const dto = await api.setStrategyControls(name, { archived });
+      if (archived && !showArchived) setRows((rs) => rs.filter((r) => r.name !== name));
+      else patch(dto);
+    } catch (err2) { setErr(err2.message); }
+  };
 
   const patch = (dto) => setRows((rs) => rs.map((r) => (r.name === dto.name ? dto : r)));
 
@@ -45,10 +55,13 @@ export default function StrategyTable() {
   const categories = useMemo(
     () => ["all", ...Array.from(new Set(rows.map((r) => r.category))).sort()], [rows]);
 
+  const archivedCount = rows.filter((r) => r.archived).length;
+
   const visible = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return rows.filter((r) => {
-      if (dayOnly && r.intraday === false) return false;
+      if (!showArchived && r.archived) return false;
+      if (dayOnly && r.intraday === false && !r.archived) return false;
       if (favOnly && !r.favorite) return false;
       if (cat !== "all" && r.category !== cat) return false;
       if (!needle) return true;
@@ -58,7 +71,7 @@ export default function StrategyTable() {
         (r.tags || []).some((t) => t.toLowerCase().includes(needle))
       );
     });
-  }, [rows, q, cat, favOnly, dayOnly]);
+  }, [rows, q, cat, favOnly, dayOnly, showArchived]);
 
   const enabledCount = rows.filter((r) => r.enabled).length;
 
@@ -76,6 +89,10 @@ export default function StrategyTable() {
           </label>
           <label className="toggle-inline" style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <input type="checkbox" checked={favOnly} onChange={(e) => setFavOnly(e.target.checked)} /> ★ only
+          </label>
+          <label className="toggle-inline" style={{ display: "flex", alignItems: "center", gap: 4 }}
+                 title="Archived strategies are hidden and never scanned/backtested">
+            <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> archived ({archivedCount})
           </label>
           <button className="secondary" disabled={busy} onClick={() => setAll(true)}>Enable shown</button>
           <button className="secondary" disabled={busy} onClick={() => setAll(false)}>Disable shown</button>
@@ -96,7 +113,10 @@ export default function StrategyTable() {
               <tr className="row-click" onClick={() => setOpen(open === r.name ? null : r.name)}>
                 <td onClick={(e) => toggleFav(r, e)} title="favourite"
                     style={{ cursor: "pointer", color: r.favorite ? "#e3b341" : "#4b5563" }}>★</td>
-                <td style={{ fontWeight: 600 }}>{open === r.name ? "▾ " : "▸ "}{r.name}</td>
+                <td style={{ fontWeight: 600 }}>
+                  {open === r.name ? "▾ " : "▸ "}{r.name}
+                  {r.archived && <span className="badge SHORT" style={{ marginLeft: 6 }} title="archived — hidden & never run">ARCH</span>}
+                </td>
                 <td><span className="tag">{r.category}</span></td>
                 <td className="muted">{tfLabel(r.recommendedTimeframe)}</td>
                 <td style={{ textAlign: "center" }} title={r.intraday === false ? "not a day-trading strategy" : "day-trading suitable"}>
@@ -114,11 +134,19 @@ export default function StrategyTable() {
                 </td>
                 <td style={{ textAlign: "left" }} className="muted">{r.description}</td>
                 <td onClick={(e) => e.stopPropagation()}>
-                  <label className="toggle">
-                    <input type="checkbox" checked={r.enabled} disabled={busy}
-                           onChange={(e) => toggle(r.name, e.target.checked)} />
-                    <span className="slider" />
-                  </label>
+                  {r.archived ? (
+                    <button className="secondary" onClick={(e) => setArchived(r.name, false, e)}>Unarchive</button>
+                  ) : (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <label className="toggle">
+                        <input type="checkbox" checked={r.enabled} disabled={busy}
+                               onChange={(e) => toggle(r.name, e.target.checked)} />
+                        <span className="slider" />
+                      </label>
+                      <span className="row-click muted" style={{ fontSize: 11 }} title="archive: hide & stop running this strategy"
+                            onClick={(e) => setArchived(r.name, true, e)}>archive</span>
+                    </div>
+                  )}
                 </td>
               </tr>
               {open === r.name && (

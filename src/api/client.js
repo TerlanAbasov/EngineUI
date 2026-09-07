@@ -18,7 +18,7 @@ async function req(path, opts = {}) {
 }
 
 export const api = {
-  strategies: () => req("/strategies"),
+  strategies: (opts = {}) => req(`/strategies${opts.includeArchived ? "?includeArchived=true" : ""}`),
   strategy: (name) => req(`/strategies/${encodeURIComponent(name)}`),
   setEnabled: (name, enabled) =>
     req(`/strategies/${encodeURIComponent(name)}/enabled?enabled=${enabled}`, { method: "PUT" }),
@@ -38,6 +38,21 @@ export const api = {
 
   source: () => req("/market-data/source"),
   dataSymbols: () => req("/market-data/symbols"),
+  priceBars: ({ symbol, timeframe, start, end, limit } = {}) => {
+    const p = new URLSearchParams({ symbol });
+    if (timeframe) p.set("timeframe", timeframe);
+    if (start) p.set("start", start);
+    if (end) p.set("end", end);
+    if (limit) p.set("limit", limit);
+    return req(`/market-data/bars?${p.toString()}`);
+  },
+  // timeframe blank/"AUTO" => each strategy on its own recommended frame
+  chartSignals: ({ symbol, timeframe, strategies, limit } = {}) => {
+    const p = new URLSearchParams({ symbol, strategies });
+    if (timeframe) p.set("timeframe", timeframe);
+    if (limit) p.set("limit", limit);
+    return req(`/signals/chart?${p.toString()}`);
+  },
   pull: (symbols) =>
     req(`/market-data/pull?symbols=${symbols.map(encodeURIComponent).join(",")}`, { method: "POST" }),
 
@@ -56,8 +71,12 @@ export const api = {
     return req(`/backtests${qs ? `?${qs}` : ""}`);
   },
   deleteRun: (id) => req(`/backtests/${id}`, { method: "DELETE" }),
-  pruneHistory: (keep = 20, by = "sharpe") =>
-    req(`/backtests/prune?keep=${keep}&by=${encodeURIComponent(by)}`, { method: "POST" }),
+  // { keep, keepPct, recentRuns, by: "totalReturnPct"|"sharpe", archive }
+  pruneHistory: (opts = {}) => {
+    const p = new URLSearchParams();
+    Object.entries(opts).forEach(([k, v]) => { if (v != null && v !== "") p.set(k, v); });
+    return req(`/backtests/prune?${p.toString()}`, { method: "POST" });
+  },
   backtestTimeframes: () => req("/backtests/timeframes"),
 
   // timeframe: "" / "AUTO" => each strategy on its own recommended frame; a Timeframe id pins all.

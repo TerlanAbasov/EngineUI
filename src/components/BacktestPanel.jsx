@@ -256,23 +256,31 @@ export default function BacktestPanel() {
     minReturn: "", minCagr: "", minSharpe: "", minProfitFactor: "", minWinRate: "", maxDrawdown: "", minTrades: "",
   });
 
-  // ---- Prune history: keep only the top-N strategies ---------------------
-  const [pruneKeep, setPruneKeep] = useState(20);
-  const [pruneBy, setPruneBy] = useState("sharpe");
+  // ---- Prune: keep the most profitable strategies, archive + delete the rest ----
+  const [pruneVal, setPruneVal] = useState(50);
+  const [pruneMode, setPruneMode] = useState("pct");        // pct | count
+  const [pruneBy, setPruneBy] = useState("totalReturnPct");
+  const [pruneRecent, setPruneRecent] = useState(2);
   const [pruneBusy, setPruneBusy] = useState(false);
   const [pruneMsg, setPruneMsg] = useState(null);
 
   const doPrune = async () => {
-    const n = Math.max(1, Number(pruneKeep) || 20);
-    const label = pruneBy === "totalReturnPct" ? "total return" : "Sharpe";
+    const n = Math.max(1, Number(pruneVal) || (pruneMode === "pct" ? 50 : 20));
+    const win = Math.max(1, Number(pruneRecent) || 2);
+    const label = pruneBy === "sharpe" ? "Sharpe" : "total return";
+    const scope = pruneMode === "pct" ? `top ${n}%` : `top ${n}`;
     if (!window.confirm(
-      `Keep only the top ${n} strategies by best ${label} and PERMANENTLY delete every backtest run ` +
-      `(runs, results, trades) for the rest — and disable those strategies. This cannot be undone. Continue?`
+      `Rank strategies by the average ${label} of their last ${win} run(s), keep the ${scope}, ` +
+      `then ARCHIVE the rest (removed from the Strategies tab, no longer scanned/backtested) and ` +
+      `PERMANENTLY delete all their runs, results and trades. Archiving is reversible; the deletes are not. Continue?`
     )) return;
     setPruneBusy(true); setErr(null); setPruneMsg(null);
     try {
-      const r = await api.pruneHistory(n, pruneBy);
-      setPruneMsg(`Kept ${r.kept.length} (by ${r.rankedBy}), disabled ${r.disabled.length}, deleted ${r.deletedRuns} runs.`);
+      const r = await api.pruneHistory({
+        [pruneMode === "pct" ? "keepPct" : "keep"]: n,
+        recentRuns: win, by: pruneBy, archive: true,
+      });
+      setPruneMsg(`Ranked ${r.ranked} by avg ${r.rankedBy} of last ${r.rankWindow} runs — kept ${r.kept.length}, archived ${r.archived.length}, deleted ${r.deletedRuns} runs.`);
       setHistFilters({ minReturn: "", minCagr: "", minSharpe: "", minProfitFactor: "", minWinRate: "", maxDrawdown: "", minTrades: "" });
       loadHistory();
       loadHistoryMeta();
@@ -499,14 +507,22 @@ export default function BacktestPanel() {
               </select>
               <span style={{ borderLeft: "1px solid #2a3441", height: 20 }} />
               <span className="muted" style={{ fontSize: 12 }}>keep top</span>
-              <input type="number" min="1" style={{ width: 56 }} value={pruneKeep}
-                     onChange={(e) => setPruneKeep(e.target.value)} />
-              <select value={pruneBy} onChange={(e) => setPruneBy(e.target.value)}>
-                <option value="sharpe">by Sharpe</option>
-                <option value="totalReturnPct">by total return</option>
+              <input type="number" min="1" style={{ width: 52 }} value={pruneVal}
+                     onChange={(e) => setPruneVal(e.target.value)} />
+              <select value={pruneMode} onChange={(e) => setPruneMode(e.target.value)}>
+                <option value="pct">%</option>
+                <option value="count">count</option>
               </select>
+              <select value={pruneBy} onChange={(e) => setPruneBy(e.target.value)}>
+                <option value="totalReturnPct">by total return</option>
+                <option value="sharpe">by Sharpe</option>
+              </select>
+              <span className="muted" style={{ fontSize: 12 }}>· last</span>
+              <input type="number" min="1" style={{ width: 44 }} value={pruneRecent}
+                     onChange={(e) => setPruneRecent(e.target.value)} title="rank on the average of each strategy's N most recent runs" />
+              <span className="muted" style={{ fontSize: 12 }}>runs</span>
               <button className="secondary" disabled={pruneBusy} onClick={doPrune}
-                      title="Disable every other strategy and permanently delete its run history">
+                      title="Archive every other strategy (hidden from Strategies tab) and permanently delete its run history">
                 {pruneBusy ? "Pruning…" : "Prune"}
               </button>
             </div>

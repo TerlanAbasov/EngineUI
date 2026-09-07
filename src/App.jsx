@@ -4,9 +4,11 @@ import StrategyTable from "./components/StrategyTable";
 import UniverseEditor from "./components/UniverseEditor";
 import BacktestPanel from "./components/BacktestPanel";
 import Scanner from "./components/Scanner";
+import ChartView from "./components/ChartView";
 
 const TABS = [
   ["backtest", "Backtest"],
+  ["chart", "Chart"],
   ["strategies", "Strategies"],
   ["universe", "Universe"],
   ["scanner", "Scanner"],
@@ -36,6 +38,7 @@ export default function App() {
       </div>
 
       {tab === "backtest" && <BacktestPanel />}
+      {tab === "chart" && <ChartView />}
       {tab === "strategies" && <StrategyTable />}
       {tab === "universe" && <UniverseEditor />}
       {tab === "scanner" && <Scanner />}
