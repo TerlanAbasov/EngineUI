@@ -74,17 +74,18 @@ export default function BacktestPanel() {
   // ---- Run history: server-side filter + sort ----------------------------
   const HIST_LIMIT = 500;
   const [histStrat, setHistStrat] = useState("all");
-  const [histSymbol, setHistSymbol] = useState("");
+  const [histSymbol, setHistSymbol] = useState("all");
   const [histSort, setHistSort] = useState({ key: "totalReturnPct", dir: -1 });   // most returns first
   const [histFilters, setHistFilters] = useState({
     minReturn: "", minCagr: "", minSharpe: "", minProfitFactor: "", minWinRate: "", maxDrawdown: "", minTrades: "",
   });
   const [histStratOptions, setHistStratOptions] = useState(["all"]);
+  const [histSymbolOptions, setHistSymbolOptions] = useState([]);
   const [histTotal, setHistTotal] = useState(0);
 
   const histParams = () => ({
     strategy: histStrat === "all" ? "" : histStrat,
-    symbol: histSymbol.trim().toUpperCase(),
+    symbol: histSymbol === "all" ? "" : histSymbol,
     ...histFilters,
     sort: histSort.key,
     dir: histSort.dir === -1 ? "desc" : "asc",
@@ -95,6 +96,7 @@ export default function BacktestPanel() {
     api.listRuns({ limit: 2000 }).then((rows) => {
       setHistTotal(rows.length);
       setHistStratOptions(["all", ...Array.from(new Set(rows.map((r) => r.strategy))).sort()]);
+      setHistSymbolOptions(Array.from(new Set(rows.flatMap((r) => r.symbols || []))).sort());
     }).catch(() => {});
 
   useEffect(() => {
@@ -549,10 +551,6 @@ export default function BacktestPanel() {
             <h3 style={{ margin: 0 }}>Run history <span className="muted">
               ({history.length}{history.length !== histTotal ? ` of ${histTotal}` : ""} — click a header to sort · hover it for what it means · click a row to reload)</span></h3>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <select value={histStrat} onChange={(e) => setHistStrat(e.target.value)}>
-                {histStratOptions.map((s) => <option key={s} value={s}>{s === "all" ? "all strategies" : s}</option>)}
-              </select>
-              <span style={{ borderLeft: "1px solid #2a3441", height: 20 }} />
               <span className="muted" style={{ fontSize: 12 }}>keep top</span>
               <input type="number" min="1" style={{ width: 52 }} value={pruneVal}
                      onChange={(e) => setPruneVal(e.target.value)} />
@@ -577,13 +575,18 @@ export default function BacktestPanel() {
           {pruneMsg && <div className="pos" style={{ marginBottom: 8 }}>{pruneMsg}</div>}
 
           <div className="filters">
-            <div className="field" title="Only runs whose universe included this stock">
+            <div className="field" title="Show only runs of this strategy">
+              <label>Strategy</label>
+              <select value={histStrat} onChange={(e) => setHistStrat(e.target.value)} style={{ minWidth: 150 }}>
+                {histStratOptions.map((s) => <option key={s} value={s}>{s === "all" ? "all strategies" : s}</option>)}
+              </select>
+            </div>
+            <div className="field" title="Show only runs whose universe included this stock">
               <label>Stock</label>
-              <input list="hist-symbols" placeholder="e.g. AAPL" style={{ width: 100 }}
-                     value={histSymbol} onChange={(e) => setHistSymbol(e.target.value)} />
-              <datalist id="hist-symbols">
-                {coverage.map((c) => <option key={c.symbol} value={c.symbol} />)}
-              </datalist>
+              <select value={histSymbol} onChange={(e) => setHistSymbol(e.target.value)} style={{ minWidth: 120 }}>
+                <option value="all">all stocks</option>
+                {histSymbolOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
             </div>
             {HIST_FILTERS.map(([k, label, ph, help]) => (
               <div className="field" key={k} title={help}>
@@ -592,8 +595,9 @@ export default function BacktestPanel() {
                        onChange={(e) => setFilter(k, e.target.value)} />
               </div>
             ))}
-            {(filtersActive || histSymbol) &&
-              <button className="secondary xs" onClick={() => { resetFilters(); setHistSymbol(""); }}>clear filters</button>}
+            {(filtersActive || histStrat !== "all" || histSymbol !== "all") &&
+              <button className="secondary xs"
+                      onClick={() => { resetFilters(); setHistStrat("all"); setHistSymbol("all"); }}>clear filters</button>}
           </div>
 
           <div className="table-scroll" style={{ maxHeight: 340 }}>
