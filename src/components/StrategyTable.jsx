@@ -16,16 +16,21 @@ export default function StrategyTable() {
   const [dayOnly, setDayOnly] = useState(true);    // day-trading strategies only
   const [showArchived, setShowArchived] = useState(false);
 
-  const load = () => api.strategies({ includeArchived: showArchived }).then(setRows).catch((e) => setErr(e.message));
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [showArchived]);
+  // always load everything (incl. archived); the `visible` filter hides archived unless the toggle is on
+  const load = () => api.strategies({ includeArchived: true }).then(setRows).catch((e) => setErr(e.message));
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   const setArchived = async (name, archived, e) => {
     e?.stopPropagation();
-    try {
-      const dto = await api.setStrategyControls(name, { archived });
-      if (archived && !showArchived) setRows((rs) => rs.filter((r) => r.name !== name));
-      else patch(dto);
-    } catch (err2) { setErr(err2.message); }
+    try { patch(await api.setStrategyControls(name, { archived })); }
+    catch (err2) { setErr(err2.message); }
+  };
+
+  const unarchiveAll = async () => {
+    if (!window.confirm(`Restore all ${archivedCount} archived strategies? (Their enabled state is left as-is.)`)) return;
+    setBusy(true); setErr(null);
+    try { await api.unarchiveAllStrategies(); await load(); }
+    catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 
   const patch = (dto) => setRows((rs) => rs.map((r) => (r.name === dto.name ? dto : r)));
@@ -78,7 +83,8 @@ export default function StrategyTable() {
   return (
     <div className="panel">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-        <h2 style={{ margin: 0 }}>Strategies <span className="muted" style={{ fontSize: 13 }}>({enabledCount}/{rows.length} enabled · {visible.length} shown)</span></h2>
+        <h2 style={{ margin: 0 }}>Strategies <span className="muted" style={{ fontSize: 13 }}>
+          ({enabledCount} enabled · {rows.length - archivedCount} active{archivedCount ? ` · ${archivedCount} archived` : ""} · {visible.length} shown)</span></h2>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <input placeholder="search name / category / tag" value={q} onChange={(e) => setQ(e.target.value)} />
           <select value={cat} onChange={(e) => setCat(e.target.value)}>
@@ -94,6 +100,8 @@ export default function StrategyTable() {
                  title="Archived strategies are hidden and never scanned/backtested">
             <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> archived ({archivedCount})
           </label>
+          {archivedCount > 0 &&
+            <button className="secondary" disabled={busy} onClick={unarchiveAll}>Unarchive all ({archivedCount})</button>}
           <button className="secondary" disabled={busy} onClick={() => setAll(true)}>Enable shown</button>
           <button className="secondary" disabled={busy} onClick={() => setAll(false)}>Disable shown</button>
         </div>

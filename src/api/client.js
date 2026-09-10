@@ -28,6 +28,7 @@ export const api = {
     req(`/strategies/${encodeURIComponent(name)}/params`, { method: "DELETE" }),
   setStrategyControls: (name, controls) =>
     req(`/strategies/${encodeURIComponent(name)}/controls`, { method: "PUT", body: JSON.stringify(controls) }),
+  unarchiveAllStrategies: () => req("/strategies/unarchive-all", { method: "POST" }),
   optimizeStrategy: (name, body) =>
     req(`/strategies/${encodeURIComponent(name)}/optimize`, { method: "POST", body: JSON.stringify(body) }),
 
