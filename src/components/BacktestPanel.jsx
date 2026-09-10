@@ -44,6 +44,7 @@ export default function BacktestPanel() {
     // execution / risk controls
     timeframe: "AUTO",
     perStrategyTf: false,
+    includeDisabled: false,   // run-all: also run disabled (non-archived) strategies
     positionSize: 1,
     execLag: 1,
     stopLossPct: 0,
@@ -120,6 +121,7 @@ export default function BacktestPanel() {
   const isAll = form.strategyName === "ALL";
   const isMulti = isEnsemble || isAll;
   const pickedStrategy = strategies.find((s) => s.name === form.strategyName);
+  const enabledCount = strategies.filter((s) => s.enabled).length;
 
   const parseSyms = (s) => s.split(/[,\s]+/).map((x) => x.trim().toUpperCase()).filter(Boolean);
   const selectedSyms = useMemo(() => new Set(parseSyms(form.symbols)), [form.symbols]);
@@ -167,6 +169,7 @@ export default function BacktestPanel() {
     allowShort: form.allowShort,
     ...controls(),
     perStrategyTimeframe: form.perStrategyTf,
+    includeDisabled: isAll && form.includeDisabled,
     execLag: Number(form.execLag),
     riskFreePct: Number(form.riskFreePct),
     warmupBars: Number(form.warmupBars),
@@ -317,11 +320,19 @@ export default function BacktestPanel() {
           <div>
             <label>Strategy</label>
             <select value={form.strategyName} onChange={(e) => upd("strategyName", e.target.value)} style={{ width: "100%" }}>
-              <option value="ALL">▶ All enabled (leaderboard)</option>
+              <option value="ALL">▶ All enabled — leaderboard ({enabledCount})</option>
               <option value={ENSEMBLE}>✦ Ensemble (blended portfolio)</option>
               <option value={PAIRS}>◆ Pairs trading (market-neutral)</option>
-              {strategies.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+              {strategies.map((s) => <option key={s.name} value={s.name}>{s.name}{s.enabled ? "" : " (disabled)"}</option>)}
             </select>
+            {isAll && (
+              <label className="toggle-inline" style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, marginTop: 4 }}
+                     title="Also run strategies that are turned off (archived strategies are still excluded)">
+                <input type="checkbox" checked={form.includeDisabled}
+                       onChange={(e) => upd("includeDisabled", e.target.checked)} />
+                include disabled ({strategies.length} total)
+              </label>
+            )}
           </div>
 
           {isPairs ? (
@@ -485,6 +496,12 @@ export default function BacktestPanel() {
               {lbSymbolOptions.length > 12 && <span className="tag">+{lbSymbolOptions.length - 12}</span>}
             </span>
           </div>
+          {leaderboard.length < strategies.length && (
+            <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+              Ran {leaderboard.length} of {strategies.length} strategies — the rest are disabled.
+              {" "}Tick <b>include disabled</b> next to the Strategy picker, or enable them in the Strategies tab.
+            </div>
+          )}
           <div className="filters">
             <div className="field">
               <label>Strategy</label>
