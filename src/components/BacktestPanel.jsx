@@ -62,6 +62,8 @@ export default function BacktestPanel() {
     ensembleNames: "",
   });
   const [showAdv, setShowAdv] = useState(false);
+  const [lbNames, setLbNames] = useState([]);      // run-all: run only this subset of strategies (empty = all)
+  const [lbNameSearch, setLbNameSearch] = useState("");
   const [coverage, setCoverage] = useState([]);   // [{ symbol, firstBar, lastBar, bars, fresh }]
   const [showStale, setShowStale] = useState(false);
   const [leaderboard, setLeaderboard] = useState(null);
@@ -123,6 +125,14 @@ export default function BacktestPanel() {
   const pickedStrategy = strategies.find((s) => s.name === form.strategyName);
   const enabledCount = strategies.filter((s) => s.enabled).length;
 
+  const toggleLbName = (name) =>
+    setLbNames((ns) => (ns.includes(name) ? ns.filter((n) => n !== name) : [...ns, name]));
+  const lbNameChoices = useMemo(() => {
+    const q = lbNameSearch.trim().toLowerCase();
+    return strategies.filter((s) =>
+      !q || s.name.toLowerCase().includes(q) || (s.category || "").toLowerCase().includes(q));
+  }, [strategies, lbNameSearch]);
+
   const parseSyms = (s) => s.split(/[,\s]+/).map((x) => x.trim().toUpperCase()).filter(Boolean);
   const selectedSyms = useMemo(() => new Set(parseSyms(form.symbols)), [form.symbols]);
   const toggleSymbol = (sym) => setForm((f) => {
@@ -169,7 +179,8 @@ export default function BacktestPanel() {
     allowShort: form.allowShort,
     ...controls(),
     perStrategyTimeframe: form.perStrategyTf,
-    includeDisabled: isAll && form.includeDisabled,
+    includeDisabled: isAll && form.includeDisabled && lbNames.length === 0,
+    strategyNames: isAll && lbNames.length ? lbNames : null,
     execLag: Number(form.execLag),
     riskFreePct: Number(form.riskFreePct),
     warmupBars: Number(form.warmupBars),
@@ -325,7 +336,7 @@ export default function BacktestPanel() {
               <option value={PAIRS}>◆ Pairs trading (market-neutral)</option>
               {strategies.map((s) => <option key={s.name} value={s.name}>{s.name}{s.enabled ? "" : " (disabled)"}</option>)}
             </select>
-            {isAll && (
+            {isAll && lbNames.length === 0 && (
               <label className="toggle-inline" style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, marginTop: 4 }}
                      title="Also run strategies that are turned off (archived strategies are still excluded)">
                 <input type="checkbox" checked={form.includeDisabled}
@@ -381,6 +392,43 @@ export default function BacktestPanel() {
                 </div>
               )}
             </>
+          )}
+
+          {isAll && (
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label>
+                Strategies to run <span className="muted" style={{ textTransform: "none" }}>
+                  ({lbNames.length ? `${lbNames.length} picked` : `none picked — running all ${form.includeDisabled ? strategies.length : enabledCount}`})</span>
+              </label>
+              {lbNames.length > 0 && (
+                <div className="chip-row" style={{ margin: "4px 0" }}>
+                  {lbNames.map((n) => (
+                    <span key={n} className="tag row-click" onClick={() => toggleLbName(n)} title="remove">{n} ✕</span>
+                  ))}
+                  <span className="tag row-click" onClick={() => setLbNames([])} title="clear all">clear</span>
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", margin: "4px 0" }}>
+                <input placeholder="search name / category…" value={lbNameSearch}
+                       onChange={(e) => setLbNameSearch(e.target.value)} style={{ flex: "1 1 200px" }} />
+                <button type="button" className="secondary xs"
+                        onClick={() => setLbNames(Array.from(new Set([...lbNames, ...lbNameChoices.map((s) => s.name)])))}>
+                  add {lbNameChoices.length} shown
+                </button>
+              </div>
+              <div className="table-scroll" style={{ maxHeight: 160, padding: "4px 8px" }}>
+                {lbNameChoices.map((s) => (
+                  <label key={s.name} className="row-click"
+                         style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0", textTransform: "none", fontSize: 13 }}>
+                    <input type="checkbox" checked={lbNames.includes(s.name)} onChange={() => toggleLbName(s.name)} />
+                    <span style={{ fontWeight: 600 }}>{s.name}</span>
+                    <span className="tag">{s.category}</span>
+                    {!s.enabled && <span className="muted" style={{ fontSize: 11 }}>disabled</span>}
+                  </label>
+                ))}
+                {lbNameChoices.length === 0 && <div className="muted" style={{ fontSize: 12, padding: 4 }}>no match</div>}
+              </div>
+            </div>
           )}
 
           {isEnsemble && (
@@ -496,7 +544,9 @@ export default function BacktestPanel() {
               {lbSymbolOptions.length > 12 && <span className="tag">+{lbSymbolOptions.length - 12}</span>}
             </span>
           </div>
-          {leaderboard.length < strategies.length && (
+          {lbNames.length > 0 ? (
+            <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>Ran {leaderboard.length} picked strateg{leaderboard.length === 1 ? "y" : "ies"}.</div>
+          ) : leaderboard.length < strategies.length && (
             <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
               Ran {leaderboard.length} of {strategies.length} strategies — the rest are disabled.
               {" "}Tick <b>include disabled</b> next to the Strategy picker, or enable them in the Strategies tab.
