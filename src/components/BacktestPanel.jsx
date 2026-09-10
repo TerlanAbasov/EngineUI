@@ -74,6 +74,7 @@ export default function BacktestPanel() {
   // ---- Run history: server-side filter + sort ----------------------------
   const HIST_LIMIT = 500;
   const [histStrat, setHistStrat] = useState("all");
+  const [histSymbol, setHistSymbol] = useState("");
   const [histSort, setHistSort] = useState({ key: "totalReturnPct", dir: -1 });   // most returns first
   const [histFilters, setHistFilters] = useState({
     minReturn: "", minCagr: "", minSharpe: "", minProfitFactor: "", minWinRate: "", maxDrawdown: "", minTrades: "",
@@ -83,6 +84,7 @@ export default function BacktestPanel() {
 
   const histParams = () => ({
     strategy: histStrat === "all" ? "" : histStrat,
+    symbol: histSymbol.trim().toUpperCase(),
     ...histFilters,
     sort: histSort.key,
     dir: histSort.dir === -1 ? "desc" : "asc",
@@ -103,12 +105,12 @@ export default function BacktestPanel() {
     loadHistoryMeta();
   }, []);
 
-  // refetch history when the strategy filter, numeric filters or sort change (debounced)
+  // refetch history when the strategy / symbol / numeric filters or sort change (debounced)
   useEffect(() => {
     const t = setTimeout(loadHistory, 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [histStrat, histFilters, histSort]);
+  }, [histStrat, histSymbol, histFilters, histSort]);
 
   const upd = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const isPairs = form.strategyName === PAIRS;
@@ -184,6 +186,7 @@ export default function BacktestPanel() {
 
   const run = async () => {
     setBusy(true); setErr(null); setResult(null); setLeaderboard(null); setSort(null); setEnsemble(null);
+    setLbStrat(""); setLbSymbol("");
     try {
       if (isPairs) {
         if (!form.symbolA.trim() || !form.symbolB.trim()) throw new Error("Enter both pair symbols");
@@ -228,20 +231,36 @@ export default function BacktestPanel() {
         ? { key, type, dir: s.dir === -1 ? 1 : -1 }
         : { key, type, dir: type === "str" ? 1 : -1 });
 
-  const sortedBoard = useMemo(() => {
-    if (!leaderboard || !sort) return leaderboard;
-    const pick = (e) =>
-      sort.key === "strategy" ? e.strategy
-        : sort.key === "timeframe" ? tfLabel(e.timeframe)
-          : e.metrics?.[sort.key];
-    return [...leaderboard].sort((a, b) => {
-      const x = pick(a), y = pick(b);
-      if (sort.type === "str") return sort.dir * String(x ?? "").localeCompare(String(y ?? ""));
-      const nx = x == null || Number.isNaN(x) ? -Infinity : x;
-      const ny = y == null || Number.isNaN(y) ? -Infinity : y;
-      return sort.dir * (nx - ny);
-    });
-  }, [leaderboard, sort, timeframes]);
+  // ---- Leaderboard: client-side filter (strategy / stock) + column sort ----
+  const [lbStrat, setLbStrat] = useState("");
+  const [lbSymbol, setLbSymbol] = useState("");
+
+  const lbSymbolOptions = useMemo(
+    () => Array.from(new Set((leaderboard || []).flatMap((e) => e.symbols || []))).sort(),
+    [leaderboard]);
+
+  const boardView = useMemo(() => {
+    if (!leaderboard) return null;
+    const sName = lbStrat.trim().toLowerCase();
+    const sSym = lbSymbol.trim().toUpperCase();
+    let rows = leaderboard.filter((e) =>
+      (!sName || e.strategy.toLowerCase().includes(sName)) &&
+      (!sSym || (e.symbols || []).includes(sSym)));
+    if (sort) {
+      const pick = (e) =>
+        sort.key === "strategy" ? e.strategy
+          : sort.key === "timeframe" ? tfLabel(e.timeframe)
+            : e.metrics?.[sort.key];
+      rows = [...rows].sort((a, b) => {
+        const x = pick(a), y = pick(b);
+        if (sort.type === "str") return sort.dir * String(x ?? "").localeCompare(String(y ?? ""));
+        const nx = x == null || Number.isNaN(x) ? -Infinity : x;
+        const ny = y == null || Number.isNaN(y) ? -Infinity : y;
+        return sort.dir * (nx - ny);
+      });
+    }
+    return rows;
+  }, [leaderboard, sort, lbStrat, lbSymbol, timeframes]);
 
   const sortArrow = (k) => (sort?.key === k ? (sort.dir === -1 ? " ▼" : " ▲") : "");
 
@@ -455,30 +474,58 @@ export default function BacktestPanel() {
 
       {leaderboard && (
         <div className="panel">
-          <h3 style={{ marginTop: 0 }}>Leaderboard <span className="muted">(click a header to sort · hover it for what it means · click a row for the full report)</span></h3>
-          <table>
-            <thead>
-              <tr>
-                <th className="row-click" title="Strategy name" onClick={() => clickSort("strategy", "str")}>Strategy{sortArrow("strategy")}</th>
-                <th className="row-click" title="Bar interval the run used" onClick={() => clickSort("timeframe", "str")}>TF{sortArrow("timeframe")}</th>
-                {KPI_KEYS.map(([k, l]) => (
-                  <th key={k} className="row-click" title={METRIC_HELP[k]} onClick={() => clickSort(k, "num")}>{l}{sortArrow(k)}</th>
-                ))}
-                <th className="row-click" title="Closed long trades / closed short trades" onClick={() => clickSort("longOps", "num")}>Long / Short{sortArrow("longOps")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedBoard.map((e) => (
-                <tr key={e.runId} className="row-click" onClick={() => openRun(e.runId)}
-                    style={result?.runId === e.runId ? { background: "#161d29" } : undefined}>
-                  <td style={{ fontWeight: 600 }}>{e.strategy}</td>
-                  <td className="muted">{tfLabel(e.timeframe)}</td>
-                  {KPI_KEYS.map(([k]) => <td key={k} className={cls(e.metrics?.[k])}>{fmt(e.metrics?.[k])}</td>)}
-                  <td className="muted">{fmt(e.metrics?.longOps, 0)} / {fmt(e.metrics?.shortOps, 0)}</td>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
+            <h3 style={{ margin: 0 }}>Leaderboard
+              <span className="count"> · {boardView.length}{boardView.length !== leaderboard.length ? ` of ${leaderboard.length}` : ""} strategies</span>
+            </h3>
+            <span className="chip-row">
+              {lbSymbolOptions.slice(0, 12).map((s) => <span key={s} className="tag">{s}</span>)}
+              {lbSymbolOptions.length > 12 && <span className="tag">+{lbSymbolOptions.length - 12}</span>}
+            </span>
+          </div>
+          <div className="filters">
+            <div className="field">
+              <label>Strategy</label>
+              <input placeholder="search name…" value={lbStrat} onChange={(e) => setLbStrat(e.target.value)} />
+            </div>
+            <div className="field">
+              <label>Stock</label>
+              <input list="lb-symbols" placeholder="e.g. AAPL" value={lbSymbol} onChange={(e) => setLbSymbol(e.target.value)} />
+              <datalist id="lb-symbols">{lbSymbolOptions.map((s) => <option key={s} value={s} />)}</datalist>
+            </div>
+            {(lbStrat || lbSymbol) && (
+              <button className="secondary xs" onClick={() => { setLbStrat(""); setLbSymbol(""); }}>clear</button>
+            )}
+            <span className="count">click a header to sort · hover for meaning · click a row for the report</span>
+          </div>
+          <div className="table-scroll" style={{ maxHeight: 460 }}>
+            <table>
+              <thead>
+                <tr>
+                  <th className="row-click" title="Strategy name" onClick={() => clickSort("strategy", "str")}>Strategy{sortArrow("strategy")}</th>
+                  <th className="row-click" title="Bar interval the run used" onClick={() => clickSort("timeframe", "str")}>TF{sortArrow("timeframe")}</th>
+                  {KPI_KEYS.map(([k, l]) => (
+                    <th key={k} className="row-click" title={METRIC_HELP[k]} onClick={() => clickSort(k, "num")}>{l}{sortArrow(k)}</th>
+                  ))}
+                  <th className="row-click" title="Closed long trades / closed short trades" onClick={() => clickSort("longOps", "num")}>Long / Short{sortArrow("longOps")}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {boardView.map((e) => (
+                  <tr key={e.runId} className="row-click" onClick={() => openRun(e.runId)}
+                      style={result?.runId === e.runId ? { background: "#161d29" } : undefined}>
+                    <td style={{ fontWeight: 600 }}>{e.strategy}</td>
+                    <td className="muted">{tfLabel(e.timeframe)}</td>
+                    {KPI_KEYS.map(([k]) => <td key={k} className={cls(e.metrics?.[k])}>{fmt(e.metrics?.[k])}</td>)}
+                    <td className="muted">{fmt(e.metrics?.longOps, 0)} / {fmt(e.metrics?.shortOps, 0)}</td>
+                  </tr>
+                ))}
+                {boardView.length === 0 && (
+                  <tr><td colSpan={KPI_KEYS.length + 3} className="empty">No strategies match these filters.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -529,23 +576,33 @@ export default function BacktestPanel() {
           </div>
           {pruneMsg && <div className="pos" style={{ marginBottom: 8 }}>{pruneMsg}</div>}
 
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "end", marginBottom: 10 }}>
+          <div className="filters">
+            <div className="field" title="Only runs whose universe included this stock">
+              <label>Stock</label>
+              <input list="hist-symbols" placeholder="e.g. AAPL" style={{ width: 100 }}
+                     value={histSymbol} onChange={(e) => setHistSymbol(e.target.value)} />
+              <datalist id="hist-symbols">
+                {coverage.map((c) => <option key={c.symbol} value={c.symbol} />)}
+              </datalist>
+            </div>
             {HIST_FILTERS.map(([k, label, ph, help]) => (
-              <div key={k} title={help}>
-                <label style={{ fontSize: 11 }}>{label}</label>
+              <div className="field" key={k} title={help}>
+                <label>{label}</label>
                 <input type="number" step="any" placeholder={ph} style={{ width: 90 }} value={histFilters[k]}
                        onChange={(e) => setFilter(k, e.target.value)} />
               </div>
             ))}
-            {filtersActive && <button className="secondary" onClick={resetFilters}>clear filters</button>}
+            {(filtersActive || histSymbol) &&
+              <button className="secondary xs" onClick={() => { resetFilters(); setHistSymbol(""); }}>clear filters</button>}
           </div>
 
-          <div style={{ maxHeight: 340, overflow: "auto" }}>
+          <div className="table-scroll" style={{ maxHeight: 340 }}>
             <table>
               <thead>
                 <tr>
                   <th className="row-click" title="Run id" onClick={() => clickHistSort("runId")}>Run{histArrow("runId")}</th>
                   <th className="row-click" title="Strategy name" onClick={() => clickHistSort("strategy")}>Strategy{histArrow("strategy")}</th>
+                  <th title="Number of stocks in the run's universe (hover a row for the list)">Stocks</th>
                   <th className="row-click" title="Bar interval the run used" onClick={() => clickHistSort("timeframe")}>TF{histArrow("timeframe")}</th>
                   {HIST_COLS.map(([k, l]) => (
                     <th key={k} className="row-click" title={METRIC_HELP[k]} onClick={() => clickHistSort(k)}>{l}{histArrow(k)}</th>
@@ -560,6 +617,7 @@ export default function BacktestPanel() {
                       style={result?.runId === e.runId ? { background: "#161d29" } : undefined}>
                     <td className="muted">#{e.runId}</td>
                     <td style={{ fontWeight: 600 }}>{e.strategy}</td>
+                    <td className="muted" title={(e.symbols || []).join(", ")}>{(e.symbols || []).length || "–"}</td>
                     <td className="muted">{tfLabel(e.timeframe)}</td>
                     {HIST_COLS.map(([k, , neg]) => (
                       <td key={k} className={neg ? "neg" : cls(e.metrics?.[k])}>{fmt(e.metrics?.[k])}</td>
@@ -570,8 +628,7 @@ export default function BacktestPanel() {
                   </tr>
                 ))}
                 {history.length === 0 && (
-                  <tr><td colSpan={HIST_COLS.length + 5} className="muted" style={{ padding: 12 }}>
-                    No runs match these filters.</td></tr>
+                  <tr><td colSpan={HIST_COLS.length + 6} className="empty">No runs match these filters.</td></tr>
                 )}
               </tbody>
             </table>

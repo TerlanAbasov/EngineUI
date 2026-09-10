@@ -71,6 +71,7 @@ export default function Scanner() {
             {rows.length} signals · <span className="new-dot">{newCount} new</span>
             {stale && " · showing last persisted signals — click “Run scan” to refresh"}
           </div>
+          <div className="table-scroll" style={{ maxHeight: "65vh" }}>
           <table>
             <thead>
               <tr>
@@ -109,6 +110,7 @@ export default function Scanner() {
               ))}
             </tbody>
           </table>
+          </div>
         </>
       )}
       {!rows && !busy && <div className="spinner">Click “Run scan” to generate current signals.</div>}

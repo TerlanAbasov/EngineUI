@@ -99,6 +99,7 @@ export default function StrategyTable() {
         </div>
       </div>
       {err && <div className="neg" style={{ marginBottom: 8 }}>{err}</div>}
+      <div className="table-scroll" style={{ maxHeight: "70vh" }}>
       <table>
         <thead>
           <tr>
@@ -160,6 +161,7 @@ export default function StrategyTable() {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
