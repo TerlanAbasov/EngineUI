@@ -10,8 +10,12 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
-Vite proxies `/api` to `http://localhost:8080` (see `vite.config.js`), so start the
+Vite proxies `/api` to `http://localhost:8082` (see `vite.config.js`), so start the
 backend first. To point at a different backend, set `VITE_API_BASE`.
+
+It also proxies `/exec-api` to `http://localhost:8081` — the **ExecutionEngine**
+paper-trading order execution service (a separate repo/process) used by the
+**Execution** tab. Set `VITE_EXEC_API_BASE` to point that at a different host.
 
 ```bash
 npm run build      # production bundle in dist/
@@ -30,6 +34,13 @@ npm run build      # production bundle in dist/
   persisted signals (`GET /api/signals`) on open, and — when the backend has
   `quantplat.execution-engine.base-url` set — can forward a LONG/SHORT row to
   ExecutionEngine (`POST /api/execution/send`).
+- **Execution** — a command console for ExecutionEngine itself (paper account
+  `DU8704817`): manual trade commands (buy/sell/close-all/cancel), account &amp;
+  PnL/positions requests, a raw TradingView-alert sender, and engine start/stop/
+  restart. ExecutionEngine currently exposes only two endpoints — `POST
+  /trades/command` and `POST /alerts/tv-hook` — neither returns structured data
+  (results go to Telegram), so this tab is a command console, not a live dashboard;
+  see `src/components/execution/`.
 
 All timestamps from the backend are ISO-8601 instants (since the
 bar-interval-timestamps migration) and are rendered as calendar dates, with the

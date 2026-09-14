@@ -9,7 +9,11 @@ async function req(path, opts = {}) {
     let msg = `HTTP ${res.status}`;
     try {
       const body = await res.json();
+      // GlobalExceptionHandler only wraps a few exception types as {error}; anything
+      // else falls back to Spring Boot's default body ({timestamp,status,error,path,
+      // message}), where the useful text is in `message` instead.
       if (body.error) msg = body.error;
+      else if (body.message) msg = body.message;
     } catch (_) {}
     throw new Error(msg);
   }

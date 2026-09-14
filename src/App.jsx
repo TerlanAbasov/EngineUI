@@ -5,13 +5,16 @@ import UniverseEditor from "./components/UniverseEditor";
 import BacktestPanel from "./components/BacktestPanel";
 import Scanner from "./components/Scanner";
 import ChartView from "./components/ChartView";
+import ExecutionConsole from "./components/execution/ExecutionConsole";
 
+// [id, label, group] — group renders as a small heading above the first tab in it.
 const TABS = [
-  ["backtest", "Backtest"],
-  ["chart", "Chart"],
-  ["strategies", "Strategies"],
-  ["universe", "Universe"],
-  ["scanner", "Scanner"],
+  ["backtest", "Backtest", "Research"],
+  ["chart", "Chart", "Research"],
+  ["strategies", "Strategies", "Research"],
+  ["universe", "Universe", "Research"],
+  ["scanner", "Scanner", "Research"],
+  ["execution", "Execution", "Live trading"],
 ];
 
 export default function App() {
@@ -19,6 +22,8 @@ export default function App() {
   const [source, setSource] = useState(null);
 
   useEffect(() => { api.source().then((s) => setSource(s.source)).catch(() => {}); }, []);
+
+  let lastGroup = null;
 
   return (
     <div className="app">
@@ -29,19 +34,33 @@ export default function App() {
         </span>
       </div>
 
-      <div className="tabs">
-        {TABS.map(([id, label]) => (
-          <div key={id} className={`tab ${tab === id ? "active" : ""}`} onClick={() => setTab(id)}>
-            {label}
+      <div className="layout">
+        <nav className="sidebar">
+          <div className="tabs">
+            {TABS.map(([id, label, group]) => {
+              const showLabel = group !== lastGroup;
+              lastGroup = group;
+              return (
+                <div key={id}>
+                  {showLabel && <div className="tab-group-label">{group}</div>}
+                  <div className={`tab ${tab === id ? "active" : ""}`} onClick={() => setTab(id)}>
+                    {label}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        ))}
-      </div>
+        </nav>
 
-      {tab === "backtest" && <BacktestPanel />}
-      {tab === "chart" && <ChartView />}
-      {tab === "strategies" && <StrategyTable />}
-      {tab === "universe" && <UniverseEditor />}
-      {tab === "scanner" && <Scanner />}
+        <div className="content">
+          {tab === "backtest" && <BacktestPanel />}
+          {tab === "chart" && <ChartView />}
+          {tab === "strategies" && <StrategyTable />}
+          {tab === "universe" && <UniverseEditor />}
+          {tab === "scanner" && <Scanner />}
+          {tab === "execution" && <ExecutionConsole />}
+        </div>
+      </div>
     </div>
   );
 }
