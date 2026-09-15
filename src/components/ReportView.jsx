@@ -10,8 +10,9 @@ const GRID = "#2a3441";
 export default function ReportView({ result }) {
   if (!result) return null;
   const { strategy, symbols, start, end, metrics, dates, equity, benchmark, drawdown, trades,
-          timeframe, bars } = result;
+          timeframe, bars, symbolReturnsPct } = result;
   const m = metrics || {};
+  const symbolReturns = Object.entries(symbolReturnsPct || {}).sort((a, b) => b[1] - a[1]);
 
   const series = downsample(
     (dates || []).map((d, i) => ({
@@ -47,6 +48,31 @@ export default function ReportView({ result }) {
           Returns are on starting capital (fixed position size, not compounded) — total return ≈ the sum of every trade's P&amp;L.
         </p>
       </div>
+
+      {symbolReturns.length > 0 && (
+        <div className="panel">
+          <h3 style={{ marginTop: 0 }}>Return by Stock</h3>
+          <div style={{ maxHeight: 320, overflow: "auto" }}>
+            <table>
+              <thead>
+                <tr><th>Symbol</th><th style={{ textAlign: "right" }}>Total Return %</th></tr>
+              </thead>
+              <tbody>
+                {symbolReturns.map(([sym, pct]) => (
+                  <tr key={sym}>
+                    <td>{sym}</td>
+                    <td className={cls(pct)} style={{ textAlign: "right" }}>{fmt(pct)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>
+            Each stock's own total return, as if it were backtested alone with this run's
+            settings — not its weighted contribution to the portfolio total above.
+          </p>
+        </div>
+      )}
 
       <div className="panel">
         <h3 style={{ marginTop: 0 }}>Long vs Short</h3>

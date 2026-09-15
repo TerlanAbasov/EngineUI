@@ -1,6 +1,6 @@
-# EngineUI — QuantPlat frontend
+# EngineUI — QuantEngine frontend
 
-React 18 + Vite + Recharts UI for the QuantPlat quant trading & backtesting
+React 18 + Vite + Recharts UI for the QuantEngine quant trading & backtesting
 platform. Talks to the Spring Boot backend (repo: **DecisionEngine**) over REST.
 
 ## Run

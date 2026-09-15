@@ -144,6 +144,7 @@ export default function BacktestPanel() {
   const pickable = useMemo(
     () => (showStale ? coverage : coverage.filter((c) => c.fresh)),
     [coverage, showStale]);
+  const addAllSymbols = () => upd("symbols", pickable.map((c) => c.symbol).join(" "));
 
   const ensembleBody = () => ({
     strategyNames: form.ensembleNames.trim()
@@ -362,6 +363,12 @@ export default function BacktestPanel() {
                   <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>
                     {freshCount} symbol{freshCount === 1 ? "" : "s"} with fresh data
                     {coverage[0]?.timeframe ? ` @ ${coverage[0].timeframe}` : ""} — click to add / remove
+                    {pickable.length > 0 && (
+                      <>
+                        {" · "}
+                        <span className="row-click" onClick={addAllSymbols}>add all</span>
+                      </>
+                    )}
                     {coverage.length > freshCount && (
                       <>
                         {" · "}
