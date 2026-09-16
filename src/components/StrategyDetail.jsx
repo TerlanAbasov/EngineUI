@@ -19,6 +19,8 @@ export default function StrategyDetail({ strat, onSaved }) {
     notes: strat.notes || "",
     recommendedTimeframe: strat.recommendedTimeframe || "H1",
     intraday: strat.intraday !== false,
+    defaultStopLossPct: strat.defaultStopLossPct ?? "",
+    defaultTakeProfitPct: strat.defaultTakeProfitPct ?? "",
   });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
@@ -33,6 +35,11 @@ export default function StrategyDetail({ strat, onSaved }) {
   const [optRes, setOptRes] = useState(null);
   const [optBusy, setOptBusy] = useState(false);
 
+  // risk-default sweep (timeframe x stop-loss% x take-profit%)
+  const [riskForm, setRiskForm] = useState({ symbols: "", start: "", end: "" });
+  const [riskRes, setRiskRes] = useState(null);
+  const [riskBusy, setRiskBusy] = useState(false);
+
   const dirty =
     keys.some((k) => Number(params[k]) !== Number(strat.params[k])) ||
     Number(ctl.weight) !== (strat.weight ?? 1) ||
@@ -41,7 +48,9 @@ export default function StrategyDetail({ strat, onSaved }) {
     ctl.tags !== (strat.tags || []).join(", ") ||
     ctl.notes !== (strat.notes || "") ||
     ctl.recommendedTimeframe !== (strat.recommendedTimeframe || "H1") ||
-    ctl.intraday !== (strat.intraday !== false);
+    ctl.intraday !== (strat.intraday !== false) ||
+    String(ctl.defaultStopLossPct) !== String(strat.defaultStopLossPct ?? "") ||
+    String(ctl.defaultTakeProfitPct) !== String(strat.defaultTakeProfitPct ?? "");
 
   const flash = (m) => { setMsg(m); setErr(null); setTimeout(() => setMsg(null), 2500); };
 
@@ -59,6 +68,8 @@ export default function StrategyDetail({ strat, onSaved }) {
         notes: ctl.notes,
         recommendedTimeframe: ctl.recommendedTimeframe,
         intraday: ctl.intraday,
+        defaultStopLossPct: ctl.defaultStopLossPct === "" ? null : Number(ctl.defaultStopLossPct),
+        defaultTakeProfitPct: ctl.defaultTakeProfitPct === "" ? null : Number(ctl.defaultTakeProfitPct),
       });
       onSaved(updated);
       flash("Saved.");
@@ -100,6 +111,33 @@ export default function StrategyDetail({ strat, onSaved }) {
       setParams({ ...updated.params });
       onSaved(updated);
       flash("Best parameters applied.");
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+
+  const runRiskOptimize = async () => {
+    setRiskBusy(true); setErr(null); setRiskRes(null);
+    try {
+      const body = {
+        symbols: riskForm.symbols.trim()
+          ? riskForm.symbols.split(/[,\s]+/).map((s) => s.toUpperCase()).filter(Boolean) : null,
+        start: riskForm.start || null, end: riskForm.end || null,
+      };
+      setRiskRes(await api.optimizeRiskDefaults(strat.name, body));
+    } catch (e) { setErr(e.message); } finally { setRiskBusy(false); }
+  };
+
+  const applyRisk = async () => {
+    if (!riskRes?.best) return;
+    setBusy(true); setErr(null);
+    try {
+      const { timeframe, stopLossPct, takeProfitPct } = riskRes.best;
+      const updated = await api.setStrategyControls(strat.name, {
+        recommendedTimeframe: timeframe, defaultStopLossPct: stopLossPct, defaultTakeProfitPct: takeProfitPct,
+      });
+      setCtl((c) => ({ ...c, recommendedTimeframe: timeframe,
+        defaultStopLossPct: stopLossPct, defaultTakeProfitPct: takeProfitPct }));
+      onSaved(updated);
+      flash("Risk defaults applied.");
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 
@@ -164,6 +202,18 @@ export default function StrategyDetail({ strat, onSaved }) {
                   <option key={t.id} value={t.id}>{t.label}</option>
                 ))}
               </select>
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ width: 120 }}>Default stop-loss %</span>
+              <input type="number" step="any" min="0" style={{ width: 100 }} placeholder="none"
+                     value={ctl.defaultStopLossPct}
+                     onChange={(e) => setCtl((c) => ({ ...c, defaultStopLossPct: e.target.value }))} />
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ width: 120 }}>Default take-profit %</span>
+              <input type="number" step="any" min="0" style={{ width: 100 }} placeholder="none"
+                     value={ctl.defaultTakeProfitPct}
+                     onChange={(e) => setCtl((c) => ({ ...c, defaultTakeProfitPct: e.target.value }))} />
             </label>
             <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ width: 120 }}>Intraday (day-trading)</span>
@@ -257,6 +307,44 @@ export default function StrategyDetail({ strat, onSaved }) {
               </div>
             )}
           </>
+        )}
+      </div>
+
+      {/* Risk-default sweep */}
+      <div style={{ borderTop: "1px solid #2a3441", paddingTop: 12 }}>
+        <h4 style={{ margin: "0 0 8px" }}>
+          Risk defaults <span className="muted">— best timeframe / stop-loss% / take-profit%</span>
+        </h4>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
+          <div>
+            <label>Symbols (blank = universe)</label>
+            <input value={riskForm.symbols} placeholder="AAPL MSFT"
+                   onChange={(e) => setRiskForm((f) => ({ ...f, symbols: e.target.value }))} />
+          </div>
+          <div>
+            <label>Start</label>
+            <input type="date" value={riskForm.start}
+                   onChange={(e) => setRiskForm((f) => ({ ...f, start: e.target.value }))} />
+          </div>
+          <div>
+            <label>End</label>
+            <input type="date" value={riskForm.end}
+                   onChange={(e) => setRiskForm((f) => ({ ...f, end: e.target.value }))} />
+          </div>
+          <button disabled={riskBusy} onClick={runRiskOptimize}>
+            {riskBusy ? "Sweeping…" : "Find best timeframe/SL/TP"}
+          </button>
+        </div>
+        {riskRes && (
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10 }}>
+            <b>Best:</b>
+            <code>
+              tf={riskRes.best?.timeframe} SL={fmt(riskRes.best?.stopLossPct, 1)}% TP={fmt(riskRes.best?.takeProfitPct, 1)}%
+            </code>
+            <span className={cls(riskRes.best?.score)}>{riskRes.metric} {fmt(riskRes.best?.score)}</span>
+            <span className="muted" style={{ fontSize: 11 }}>({riskRes.cellsEvaluated} combos evaluated)</span>
+            <button className="secondary" disabled={busy} onClick={applyRisk}>Apply</button>
+          </div>
         )}
       </div>
     </div>

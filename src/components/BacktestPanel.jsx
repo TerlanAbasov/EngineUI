@@ -47,8 +47,8 @@ export default function BacktestPanel() {
     includeDisabled: false,   // run-all: also run disabled (non-archived) strategies
     positionSize: 1,
     execLag: 1,
-    stopLossPct: 0,
-    takeProfitPct: 0,
+    stopLossPct: "",     // blank = each strategy's own saved default (same convention as timeframe's Auto)
+    takeProfitPct: "",
     riskFreePct: 0,
     warmupBars: 0,
     // pairs-only
@@ -165,8 +165,10 @@ export default function BacktestPanel() {
   const controls = () => ({
     timeframe: form.timeframe,
     positionSize: Number(form.positionSize),
-    stopLossPct: Number(form.stopLossPct),
-    takeProfitPct: Number(form.takeProfitPct),
+    // blank -> null: on a named/batch strategy run this falls back to that strategy's own
+    // saved default instead of forcing 0 (off) for everyone; a typed value (incl. 0) overrides uniformly.
+    stopLossPct: form.stopLossPct === "" ? null : Number(form.stopLossPct),
+    takeProfitPct: form.takeProfitPct === "" ? null : Number(form.takeProfitPct),
   });
 
   const body = () => ({
@@ -296,6 +298,7 @@ export default function BacktestPanel() {
   const [pruneVal, setPruneVal] = useState(50);
   const [pruneMode, setPruneMode] = useState("pct");        // pct | count
   const [pruneBy, setPruneBy] = useState("totalReturnPct");
+  const [pruneRemoval, setPruneRemoval] = useState("archive");   // archive | disable | delete
   const [pruneRecent, setPruneRecent] = useState(2);
   const [pruneBusy, setPruneBusy] = useState(false);
   const [pruneMsg, setPruneMsg] = useState(null);
@@ -305,18 +308,20 @@ export default function BacktestPanel() {
     const win = Math.max(1, Number(pruneRecent) || 2);
     const label = pruneBy === "sharpe" ? "Sharpe" : "total return";
     const scope = pruneMode === "pct" ? `top ${n}%` : `top ${n}`;
+    const removalVerb = pruneRemoval === "delete" ? "PERMANENTLY DELETE (config + all history)"
+      : pruneRemoval === "disable" ? "disable" : "ARCHIVE (hidden, reversible)";
     if (!window.confirm(
       `Rank strategies by the average ${label} of their last ${win} run(s), keep the ${scope}, ` +
-      `then ARCHIVE the rest (removed from the Strategies tab, no longer scanned/backtested) and ` +
-      `PERMANENTLY delete all their runs, results and trades. Archiving is reversible; the deletes are not. Continue?`
+      `then ${removalVerb} the rest and permanently delete all their runs, results and trades either way. ` +
+      `${pruneRemoval === "delete" ? "This cannot be undone." : "Archiving/disabling is reversible; the run-history deletes are not."} Continue?`
     )) return;
     setPruneBusy(true); setErr(null); setPruneMsg(null);
     try {
       const r = await api.pruneHistory({
         [pruneMode === "pct" ? "keepPct" : "keep"]: n,
-        recentRuns: win, by: pruneBy, archive: true,
+        recentRuns: win, by: pruneBy, mode: pruneRemoval,
       });
-      setPruneMsg(`Ranked ${r.ranked} by avg ${r.rankedBy} of last ${r.rankWindow} runs — kept ${r.kept.length}, archived ${r.archived.length}, deleted ${r.deletedRuns} runs.`);
+      setPruneMsg(`Ranked ${r.ranked} by avg ${r.rankedBy} of last ${r.rankWindow} runs — kept ${r.kept.length}, ${pruneRemoval}d ${r.losers.length}, deleted ${r.deletedRuns} runs.`);
       setHistFilters({ minReturn: "", minCagr: "", minSharpe: "", minProfitFactor: "", minWinRate: "", maxDrawdown: "", minTrades: "" });
       loadHistory();
       loadHistoryMeta();
@@ -487,13 +492,13 @@ export default function BacktestPanel() {
                    value={form.positionSize} onChange={(e) => upd("positionSize", e.target.value)} />
           </div>
           <div>
-            <label>Stop-loss % <span className="muted">(0 = off)</span></label>
-            <input type="number" step="0.5" min="0" style={{ width: "100%" }}
+            <label>Stop-loss % <span className="muted">(blank = per-strategy default)</span></label>
+            <input type="number" step="0.5" min="0" style={{ width: "100%" }} placeholder="Auto"
                    value={form.stopLossPct} onChange={(e) => upd("stopLossPct", e.target.value)} />
           </div>
           <div>
-            <label>Take-profit % <span className="muted">(0 = off)</span></label>
-            <input type="number" step="0.5" min="0" style={{ width: "100%" }}
+            <label>Take-profit % <span className="muted">(blank = per-strategy default)</span></label>
+            <input type="number" step="0.5" min="0" style={{ width: "100%" }} placeholder="Auto"
                    value={form.takeProfitPct} onChange={(e) => upd("takeProfitPct", e.target.value)} />
           </div>
           {!isPairs && (
@@ -639,9 +644,15 @@ export default function BacktestPanel() {
               <span className="muted" style={{ fontSize: 12 }}>· last</span>
               <input type="number" min="1" style={{ width: 44 }} value={pruneRecent}
                      onChange={(e) => setPruneRecent(e.target.value)} title="rank on the average of each strategy's N most recent runs" />
-              <span className="muted" style={{ fontSize: 12 }}>runs</span>
+              <span className="muted" style={{ fontSize: 12 }}>runs ·</span>
+              <select value={pruneRemoval} onChange={(e) => setPruneRemoval(e.target.value)}
+                      title="What to do with the strategies that don't make the cut">
+                <option value="archive">archive rest</option>
+                <option value="disable">disable rest</option>
+                <option value="delete">delete rest</option>
+              </select>
               <button className="secondary" disabled={pruneBusy} onClick={doPrune}
-                      title="Archive every other strategy (hidden from Strategies tab) and permanently delete its run history">
+                      title="Keep the top-ranked strategies; the rest are archived/disabled/deleted per the selector, and always lose their run history">
                 {pruneBusy ? "Pruning…" : "Prune"}
               </button>
             </div>

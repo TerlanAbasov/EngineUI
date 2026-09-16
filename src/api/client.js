@@ -35,6 +35,12 @@ export const api = {
   unarchiveAllStrategies: () => req("/strategies/unarchive-all", { method: "POST" }),
   optimizeStrategy: (name, body) =>
     req(`/strategies/${encodeURIComponent(name)}/optimize`, { method: "POST", body: JSON.stringify(body) }),
+  // finds the best timeframe/stop-loss%/take-profit% for one strategy; does not save it
+  optimizeRiskDefaults: (name, body) =>
+    req(`/strategies/${encodeURIComponent(name)}/optimize-risk-defaults`, { method: "POST", body: JSON.stringify(body) }),
+  // runs the risk-default sweep for every enabled strategy and saves each winner
+  optimizeRiskDefaultsBulk: (body) =>
+    req("/strategies/optimize-risk-defaults/bulk", { method: "POST", body: JSON.stringify(body) }),
 
   universe: () => req("/universe"),
   setUniverse: (symbols) => req("/universe", { method: "PUT", body: JSON.stringify(symbols) }),
@@ -76,7 +82,7 @@ export const api = {
     return req(`/backtests${qs ? `?${qs}` : ""}`);
   },
   deleteRun: (id) => req(`/backtests/${id}`, { method: "DELETE" }),
-  // { keep, keepPct, recentRuns, by: "totalReturnPct"|"sharpe", archive }
+  // { keep, keepPct, recentRuns, by: "totalReturnPct"|"sharpe", mode: "archive"|"disable"|"delete" }
   pruneHistory: (opts = {}) => {
     const p = new URLSearchParams();
     Object.entries(opts).forEach(([k, v]) => { if (v != null && v !== "") p.set(k, v); });
