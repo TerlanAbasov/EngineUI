@@ -365,22 +365,21 @@ export default function BacktestPanel() {
               <div><label>Symbols (blank = universe)</label><input style={{ width: "100%" }} placeholder="AAPL MSFT…" value={form.symbols} onChange={(e) => upd("symbols", e.target.value)} /></div>
               {coverage.length > 0 && (
                 <div style={{ gridColumn: "1 / -1" }}>
-                  <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>
-                    {freshCount} symbol{freshCount === 1 ? "" : "s"} with fresh data
-                    {coverage[0]?.timeframe ? ` @ ${coverage[0].timeframe}` : ""} — click to add / remove
+                  <div className="muted" style={{ fontSize: 11, marginBottom: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span>
+                      {freshCount} symbol{freshCount === 1 ? "" : "s"} with fresh data
+                      {coverage[0]?.timeframe ? ` @ ${coverage[0].timeframe}` : ""} — click to add / remove
+                      {coverage.length > freshCount && (
+                        <>
+                          {" · "}
+                          <span className="row-click" onClick={() => setShowStale((v) => !v)}>
+                            {showStale ? "hide stale" : `show ${coverage.length - freshCount} stale`}
+                          </span>
+                        </>
+                      )}
+                    </span>
                     {pickable.length > 0 && (
-                      <>
-                        {" · "}
-                        <span className="row-click" onClick={addAllSymbols}>add all</span>
-                      </>
-                    )}
-                    {coverage.length > freshCount && (
-                      <>
-                        {" · "}
-                        <span className="row-click" onClick={() => setShowStale((v) => !v)}>
-                          {showStale ? "hide stale" : `show ${coverage.length - freshCount} stale`}
-                        </span>
-                      </>
+                      <button type="button" className="secondary xs" onClick={addAllSymbols}>add all</button>
                     )}
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4, maxHeight: 108, overflow: "auto" }}>
