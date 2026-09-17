@@ -336,14 +336,31 @@ export default function StrategyDetail({ strat, onSaved }) {
           </button>
         </div>
         {riskRes && (
-          <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10 }}>
-            <b>Best:</b>
-            <code>
-              tf={riskRes.best?.timeframe} SL={fmt(riskRes.best?.stopLossPct, 1)}% TP={fmt(riskRes.best?.takeProfitPct, 1)}%
-            </code>
-            <span className={cls(riskRes.best?.score)}>{riskRes.metric} {fmt(riskRes.best?.score)}</span>
-            <span className="muted" style={{ fontSize: 11 }}>({riskRes.cellsEvaluated} combos evaluated)</span>
-            <button className="secondary" disabled={busy} onClick={applyRisk}>Apply</button>
+          <div style={{ marginTop: 10 }}>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <code>
+                tf={riskRes.best?.timeframe} SL={fmt(riskRes.best?.stopLossPct, 1)}% TP={fmt(riskRes.best?.takeProfitPct, 1)}%
+              </code>
+              <span className="muted" style={{ fontSize: 11 }}>
+                (picked on the first {Math.round(riskRes.trainFraction * 100)}% of the window, {riskRes.cellsEvaluated} combos)
+              </span>
+              <button className="secondary" disabled={busy} onClick={applyRisk}>Apply</button>
+            </div>
+            <div style={{ display: "flex", gap: 16, marginTop: 6 }}>
+              <div>
+                <span className="muted" style={{ fontSize: 11 }}>Train (in-sample): </span>
+                <span className={cls(riskRes.best?.score)}>{riskRes.metric} {fmt(riskRes.best?.score)}</span>
+              </div>
+              <div>
+                <span className="muted" style={{ fontSize: 11 }}>Test (unseen holdout): </span>
+                <span className={cls(riskRes.outOfSample?.score)}>{riskRes.metric} {fmt(riskRes.outOfSample?.score)}</span>
+              </div>
+            </div>
+            <p className="muted" style={{ fontSize: 11, margin: "4px 0 0" }}>
+              The train number is what the sweep optimized for — expect it to look better than
+              test. A test number close to (or negative vs.) train means this combo doesn't hold
+              up out of sample; a wide gap is a sign to distrust it rather than a strategy to chase.
+            </p>
           </div>
         )}
       </div>
