@@ -3,6 +3,15 @@ export const fmt = (v, d = 2) =>
 
 export const cls = (v) => (v > 0 ? "pos" : v < 0 ? "neg" : "");
 
+// Money with thousands separators, e.g. 1,234.50 / -87.00 (no currency symbol: the run's currency is implicit).
+const MONEY = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+export const fmtMoney = (v) =>
+  v === null || v === undefined || Number.isNaN(v) ? "–" : MONEY.format(v);
+
+// Share prices: 2 decimals normally, 4 below $10 so cheap stocks don't collapse to a couple of ticks.
+export const fmtPx = (v) =>
+  v === null || v === undefined || Number.isNaN(v) ? "–" : Number(v).toFixed(Math.abs(v) < 10 ? 4 : 2);
+
 // The backend serialises every timestamp as an ISO-8601 instant (e.g.
 // "2020-01-02T00:00:00Z") since the bar-interval-timestamps migration. Render the
 // calendar date, and only add the clock when the bar isn't at UTC midnight

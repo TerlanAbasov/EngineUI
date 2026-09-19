@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
 import { fmt, cls, fmtDate, KPI_KEYS, TIMEFRAMES, METRIC_HELP } from "../api/format";
 import ReportView from "./ReportView";
@@ -74,6 +74,11 @@ export default function BacktestPanel() {
   const [history, setHistory] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [opening, setOpening] = useState(null);   // runId whose report is being fetched
+  const [openErr, setOpenErr] = useState(null);   // { id, message } when a report couldn't be opened
+  const reportRef = useRef(null);                 // where the opened report renders (below the leaderboard)
+  const boardRef = useRef(null);
+  const openSeq = useRef(0);                      // guards against a slower, older fetch landing last
 
   // ---- Run history: server-side filter + sort ----------------------------
   const HIST_LIMIT = 500;
@@ -220,7 +225,8 @@ export default function BacktestPanel() {
   });
 
   const run = async () => {
-    setBusy(true); setErr(null); setResult(null); setLeaderboard(null); setSort(null); setEnsemble(null);
+    openSeq.current++;
+    setBusy(true); setErr(null); setResult(null); setOpenErr(null); setOpening(null); setLeaderboard(null); setSort(null); setEnsemble(null);
     setLbStrat(""); setLbSymbol("");
     try {
       if (isPairs) {
@@ -238,11 +244,34 @@ export default function BacktestPanel() {
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 
+  // The report renders below the leaderboard / form, so scroll *to it* — scrolling to the top of
+  // the page (as this used to) left it off-screen and made a row click look like it did nothing.
   const openRun = async (runId) => {
-    setBusy(true); setErr(null);
-    try { setResult(await api.getRun(runId)); window.scrollTo({ top: 0, behavior: "smooth" }); }
-    catch (e) { setErr(e.message); } finally { setBusy(false); }
+    const seq = ++openSeq.current;
+    setResult(null); setOpenErr(null); setOpening(runId);
+    try {
+      const r = await api.getRun(runId);
+      if (seq === openSeq.current) setResult(r);
+    } catch (e) {
+      if (seq === openSeq.current) setOpenErr({ id: runId, message: e.message });
+    } finally {
+      if (seq === openSeq.current) setOpening(null);
+    }
   };
+
+  const closeReport = () => {
+    openSeq.current++;                            // drop any fetch still in flight
+    setResult(null); setOpenErr(null); setOpening(null);
+    requestAnimationFrame(() => {
+      if (boardRef.current) boardRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      else window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  };
+
+  useEffect(() => {
+    if (result || opening != null || openErr)
+      reportRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [result?.runId, opening, openErr]);          // eslint-disable-line react-hooks/exhaustive-deps
 
   const removeRun = async (runId, e) => {
     e.stopPropagation();
@@ -566,7 +595,7 @@ export default function BacktestPanel() {
       </div>
 
       {leaderboard && (
-        <div className="panel">
+        <div className="panel" ref={boardRef}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
             <h3 style={{ margin: 0 }}>Leaderboard
               <span className="count"> · {boardView.length}{boardView.length !== leaderboard.length ? ` of ${leaderboard.length}` : ""} strategies</span>
@@ -614,7 +643,7 @@ export default function BacktestPanel() {
               <tbody>
                 {boardView.map((e) => (
                   <tr key={e.runId} className="row-click" onClick={() => openRun(e.runId)}
-                      style={result?.runId === e.runId ? { background: "#161d29" } : undefined}>
+                      style={result?.runId === e.runId || opening === e.runId ? { background: "#161d29" } : undefined}>
                     <td style={{ fontWeight: 600 }}>{e.strategy}</td>
                     <td className="muted">{tfLabel(e.timeframe)}</td>
                     {KPI_KEYS.map(([k]) => <td key={k} className={cls(e.metrics?.[k])}>{fmt(e.metrics?.[k])}</td>)}
@@ -632,17 +661,26 @@ export default function BacktestPanel() {
 
       {ensemble && <EnsembleReport result={ensemble} />}
 
-      {result && (
-        <>
-          {(leaderboard || history.length > 0) && (
-            <button className="secondary" style={{ margin: "0 0 12px" }}
-                    onClick={() => { setResult(null); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
-              ← Back{leaderboard ? " to leaderboard" : ""}
-            </button>
-          )}
-          <ReportView result={result} />
-        </>
-      )}
+      <div ref={reportRef} style={{ scrollMarginTop: 12 }}>
+        {opening != null && <div className="panel muted">Opening run #{opening}…</div>}
+        {openErr && (
+          <div className="panel">
+            <span className="neg">Could not open run #{openErr.id}: {openErr.message}</span>{" "}
+            <button className="secondary xs" onClick={() => openRun(openErr.id)}>retry</button>{" "}
+            <button className="secondary xs" onClick={closeReport}>dismiss</button>
+          </div>
+        )}
+        {result && (
+          <>
+            {(leaderboard || history.length > 0) && (
+              <button className="secondary" style={{ margin: "0 0 12px" }} onClick={closeReport}>
+                ← Back{leaderboard ? " to leaderboard" : ""}
+              </button>
+            )}
+            <ReportView key={result.runId} result={result} />
+          </>
+        )}
+      </div>
 
       {histTotal > 0 && (
         <div className="panel">

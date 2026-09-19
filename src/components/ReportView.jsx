@@ -1,18 +1,23 @@
+import { useState } from "react";
 import {
   LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, Legend,
 } from "recharts";
 import { fmt, cls, fmtDate, KPI_KEYS, TRADE_KEYS, RISK_KEYS, LONGSHORT_ROWS, METRIC_HELP, downsample } from "../api/format";
+import SymbolResults from "./SymbolResults";
+import TradesTable from "./TradesTable";
 
 const AXIS = { stroke: "#8b949e", fontSize: 11 };
 const GRID = "#2a3441";
 
 export default function ReportView({ result }) {
+  // symbol the trades table is filtered to: picked in the results-by-symbol table, or in the trades filter itself
+  const [tradeSymbol, setTradeSymbol] = useState("");
   if (!result) return null;
-  const { strategy, symbols, start, end, metrics, dates, equity, benchmark, drawdown, trades,
-          timeframe, bars, symbolReturnsPct } = result;
+  const { strategy, symbols, start, end, metrics, dates, equity, benchmark, drawdown,
+          timeframe, bars, runId, tradeCount } = result;
   const m = metrics || {};
-  const symbolReturns = Object.entries(symbolReturnsPct || {}).sort((a, b) => b[1] - a[1]);
+  const tradeSymbols = result.symbolResults?.length ? result.symbolResults.map((r) => r.symbol) : (symbols || []);
 
   const series = downsample(
     (dates || []).map((d, i) => ({
@@ -49,30 +54,7 @@ export default function ReportView({ result }) {
         </p>
       </div>
 
-      {symbolReturns.length > 0 && (
-        <div className="panel">
-          <h3 style={{ marginTop: 0 }}>Return by Stock</h3>
-          <div style={{ maxHeight: 320, overflow: "auto" }}>
-            <table>
-              <thead>
-                <tr><th>Symbol</th><th style={{ textAlign: "right" }}>Total Return %</th></tr>
-              </thead>
-              <tbody>
-                {symbolReturns.map(([sym, pct]) => (
-                  <tr key={sym}>
-                    <td>{sym}</td>
-                    <td className={cls(pct)} style={{ textAlign: "right" }}>{fmt(pct)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>
-            Each stock's own total return, as if it were backtested alone with this run's
-            settings — not its weighted contribution to the portfolio total above.
-          </p>
-        </div>
-      )}
+      <SymbolResults result={result} selected={tradeSymbol} onSelect={setTradeSymbol} />
 
       <div className="panel">
         <h3 style={{ marginTop: 0 }}>Long vs Short</h3>
@@ -145,48 +127,25 @@ export default function ReportView({ result }) {
       </div>
 
       <div className="panel">
-        <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-          <div style={{ flex: "1 1 320px" }}>
-            <h3 style={{ marginTop: 0 }}>Trade Quality</h3>
-            <table>
-              <tbody>
-                {TRADE_KEYS.map(([k, label]) => {
-                  const d = ["trades", "maxWinStreak", "maxLossStreak"].includes(k) ? 0 : k === "tradesPerYear" ? 1 : 2;
-                  return <tr key={k} title={METRIC_HELP[k]}><td className="muted">{label}</td><td className={cls(k === "worstTradePct" ? -1 : k === "bestTradePct" ? 1 : 0)}>{fmt(metrics?.[k], d)}</td></tr>;
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div style={{ flex: "2 1 480px" }}>
-            <h3 style={{ marginTop: 0 }}>Recent Trades <span className="muted">({trades?.length || 0} total)</span></h3>
-            <div style={{ maxHeight: 320, overflow: "auto" }}>
-              <table>
-                <thead>
-                  <tr><th>Symbol</th><th>Side</th><th>Entry</th><th>Exit</th><th>Bars</th>
-                    <th title="Contribution to the portfolio's total return (each symbol is an equal 1/N sleeve)">Contrib %</th></tr>
-                </thead>
-                <tbody>
-                  {(trades || []).slice(-40).reverse().map((t, i) => (
-                    <tr key={i}>
-                      <td>{t.symbol}</td>
-                      <td><span className={`badge ${t.side}`}>{t.side}</span></td>
-                      <td className="muted">{fmtDate(t.entryDate)}</td>
-                      <td className="muted">{fmtDate(t.exitDate)}</td>
-                      <td>{t.bars}</td>
-                      <td className={cls(t.returnPct)}>{fmt(t.returnPct * 100)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+        <h3 style={{ marginTop: 0 }}>Trade Quality</h3>
+        <table>
+          <tbody>
+            {TRADE_KEYS.map(([k, label]) => {
+              const d = ["trades", "maxWinStreak", "maxLossStreak"].includes(k) ? 0 : k === "tradesPerYear" ? 1 : 2;
+              return <tr key={k} title={METRIC_HELP[k]}><td className="muted">{label}</td><td className={cls(k === "worstTradePct" ? -1 : k === "bestTradePct" ? 1 : 0)}>{fmt(metrics?.[k], d)}</td></tr>;
+            })}
+          </tbody>
+        </table>
         <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>
-          Commission + slippage charged on every fill; signals executed next bar (no look-ahead).
-          Each trade's return is its contribution to the equal-weight portfolio, so the trades sum to the total return.
-          Backtested results are not indicative of future performance.
+          Commission + slippage are charged on every fill. A signal on one bar's close puts the position on for the
+          next bar, filled at that close. Backtested results are not indicative of future performance.
         </p>
       </div>
+
+      {runId != null && (
+        <TradesTable runId={runId} tradeCount={tradeCount ?? 0} symbols={tradeSymbols}
+                     symbol={tradeSymbol} onSymbolChange={setTradeSymbol} />
+      )}
     </div>
   );
 }

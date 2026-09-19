@@ -72,6 +72,13 @@ export const api = {
   pairs: (body) => req("/backtests/pairs", { method: "POST", body: JSON.stringify(body) }),
   ensemble: (body) => req("/backtests/ensemble", { method: "POST", body: JSON.stringify(body) }),
   getRun: (id) => req(`/backtests/${id}`),
+  // One page of a run's trades. params: { symbol, side: "LONG"|"SHORT", sort, dir: "asc"|"desc", page, size }
+  getTrades: (id, params = {}) => {
+    const p = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => { if (v != null && v !== "") p.set(k, v); });
+    const qs = p.toString();
+    return req(`/backtests/${id}/trades${qs ? `?${qs}` : ""}`);
+  },
   // opts: { strategy, minReturn, minCagr, minSharpe, minProfitFactor, minWinRate, maxDrawdown, minTrades, sort, dir, limit }
   listRuns: (opts = {}) => {
     const p = new URLSearchParams();
