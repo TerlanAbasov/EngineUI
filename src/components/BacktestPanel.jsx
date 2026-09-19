@@ -65,6 +65,7 @@ export default function BacktestPanel() {
   const [lbNames, setLbNames] = useState([]);      // run-all: run only this subset of strategies (empty = all)
   const [lbNameSearch, setLbNameSearch] = useState("");
   const [coverage, setCoverage] = useState([]);   // [{ symbol, firstBar, lastBar, bars, fresh }]
+  const [universe, setUniverse] = useState(null); // ["MU", ...] — null until loaded
   const [showStale, setShowStale] = useState(false);
   const [leaderboard, setLeaderboard] = useState(null);
   const [sort, setSort] = useState(null); // { key, type: "num"|"str", dir: 1|-1 }
@@ -106,6 +107,7 @@ export default function BacktestPanel() {
     api.strategies().then(setStrategies).catch((e) => setErr(e.message));
     api.backtestTimeframes().then((t) => t?.length && setTimeframes(t)).catch(() => {});
     api.dataSymbols().then(setCoverage).catch(() => {});
+    api.universe().then(setUniverse).catch(() => {});
     loadHistory();
     loadHistoryMeta();
   }, []);
@@ -140,10 +142,24 @@ export default function BacktestPanel() {
     const next = cur.includes(sym) ? cur.filter((s) => s !== sym) : [...cur, sym];
     return { ...f, symbols: next.join(" ") };
   });
-  const freshCount = useMemo(() => coverage.filter((c) => c.fresh).length, [coverage]);
+  // The Universe page is the single source of truth for which symbols the app works with, so
+  // only universe symbols are offered here — a symbol removed there must not linger in this
+  // picker just because its bars are still cached (coverage is every symbol with cached bars).
+  const scoped = useMemo(() => {
+    if (!universe) return [];
+    const inUniverse = new Set(universe);
+    return coverage.filter((c) => inUniverse.has(c.symbol));
+  }, [coverage, universe]);
+  // universe symbols that can't be backtested yet because no bars are cached for them
+  const missingData = useMemo(() => {
+    if (!universe) return [];
+    const have = new Set(coverage.map((c) => c.symbol));
+    return universe.filter((s) => !have.has(s));
+  }, [coverage, universe]);
+  const freshCount = useMemo(() => scoped.filter((c) => c.fresh).length, [scoped]);
   const pickable = useMemo(
-    () => (showStale ? coverage : coverage.filter((c) => c.fresh)),
-    [coverage, showStale]);
+    () => (showStale ? scoped : scoped.filter((c) => c.fresh)),
+    [scoped, showStale]);
   const addAllSymbols = () => upd("symbols", pickable.map((c) => c.symbol).join(" "));
 
   const ensembleBody = () => ({
@@ -363,17 +379,17 @@ export default function BacktestPanel() {
           ) : (
             <>
               <div><label>Symbols (blank = universe)</label><input style={{ width: "100%" }} placeholder="AAPL MSFT…" value={form.symbols} onChange={(e) => upd("symbols", e.target.value)} /></div>
-              {coverage.length > 0 && (
+              {universe && universe.length > 0 && (
                 <div style={{ gridColumn: "1 / -1" }}>
                   <div className="muted" style={{ fontSize: 11, marginBottom: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <span>
-                      {freshCount} symbol{freshCount === 1 ? "" : "s"} with fresh data
-                      {coverage[0]?.timeframe ? ` @ ${coverage[0].timeframe}` : ""} — click to add / remove
-                      {coverage.length > freshCount && (
+                      {freshCount} universe symbol{freshCount === 1 ? "" : "s"} with fresh data
+                      {scoped[0]?.timeframe ? ` @ ${scoped[0].timeframe}` : ""} — click to add / remove
+                      {scoped.length > freshCount && (
                         <>
                           {" · "}
                           <span className="row-click" onClick={() => setShowStale((v) => !v)}>
-                            {showStale ? "hide stale" : `show ${coverage.length - freshCount} stale`}
+                            {showStale ? "hide stale" : `show ${scoped.length - freshCount} stale`}
                           </span>
                         </>
                       )}
@@ -400,6 +416,11 @@ export default function BacktestPanel() {
                     })}
                     {pickable.length === 0 && <span className="muted" style={{ fontSize: 12 }}>no symbols with fresh data</span>}
                   </div>
+                  {missingData.length > 0 && (
+                    <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
+                      No cached data yet for {missingData.join(", ")} — pull it on the Universe page to backtest it.
+                    </div>
+                  )}
                 </div>
               )}
             </>
