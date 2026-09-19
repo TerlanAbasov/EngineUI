@@ -20,7 +20,15 @@ export default function UniverseEditor() {
       // POST /api/universe merges server-side (addAll), avoiding a read/replace race.
       const saved = await api.addUniverse(parsed);
       setSymbols(saved);
-      setMsg("Universe saved.");
+      // A symbol with no cached price data won't show up anywhere that reads from
+      // /api/market-data/symbols (the Backtest page's picker, coverage, etc.) until it's
+      // pulled — so pull it right away instead of leaving that as a separate, easy-to-miss step.
+      setMsg(`Added — fetching data for ${parsed.join(", ")}…`);
+      const res = await api.pull(parsed);
+      const total = Object.values(res).reduce((a, b) => a + (b > 0 ? b : 0), 0);
+      const failed = Object.entries(res).filter(([, n]) => n < 0).map(([s]) => s);
+      setMsg(`Added ${parsed.join(", ")} — fetched ${total} bars.`
+        + (failed.length ? ` Failed to fetch: ${failed.join(", ")}.` : ""));
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 
