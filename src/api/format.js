@@ -160,3 +160,22 @@ export const fmtDuration = (ms) => {
   const two = (n) => String(n).padStart(2, "0");
   return h > 0 ? `${h}:${two(m)}:${two(sec)}` : `${m}:${two(sec)}`;
 };
+
+/** "3 min ago", "2 h ago"; anything older than a day falls back to the date. */
+export const fmtAgo = (iso, now = Date.now()) => {
+  if (!iso) return "—";
+  const ms = now - new Date(iso).getTime();
+  if (Number.isNaN(ms)) return "—";
+  const s = Math.round(ms / 1000);
+  if (s < -1) return "in " + fmtSpan(-s);
+  if (s < 5) return "just now";
+  if (s < 86400) return fmtSpan(s) + " ago";
+  return fmtDateTime(iso);
+};
+
+function fmtSpan(s) {
+  if (s < 60) return `${s} s`;
+  if (s < 3600) return `${Math.round(s / 60)} min`;
+  if (s < 86400) return `${(s / 3600).toFixed(s < 36000 ? 1 : 0)} h`;
+  return `${Math.round(s / 86400)} d`;
+}

@@ -107,6 +107,19 @@ export const api = {
   },
   backtestTimeframes: () => req("/backtests/timeframes"),
 
+  // Paper (demo-account) trading job: configure it, run/flatten it, and monitor what it did.
+  liveStatus: () => req("/live/status"),
+  liveConfig: () => req("/live/config"),
+  saveLiveConfig: (settings) => req("/live/config", { method: "PUT", body: JSON.stringify(settings) }),
+  liveRunNow: () => req("/live/run-now", { method: "POST" }),
+  liveFlatten: () => req("/live/flatten", { method: "POST" }),
+  liveStrategies: () => req("/live/strategies"),
+  liveStrategy: (name, trades = 100) => req(`/live/strategies/${encodeURIComponent(name)}?trades=${trades}`),
+  livePositions: () => req("/live/positions"),
+  liveOrders: (page = 0, size = 50) => req(`/live/orders?page=${page}&size=${size}`),
+  liveCycles: (page = 0, size = 30) => req(`/live/cycles?page=${page}&size=${size}`),
+  liveEquity: (hours = 72) => req(`/live/equity?hours=${hours}`),
+
   // timeframe: "" / "AUTO" => each strategy on its own recommended frame; a Timeframe id pins all.
   scan: (symbols, includeFlat = false, timeframe = "") =>
     req(`/scan?includeFlat=${includeFlat}${timeframe && timeframe !== "AUTO" ? `&timeframe=${encodeURIComponent(timeframe)}` : ""}`, {
