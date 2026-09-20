@@ -136,8 +136,10 @@ export default function SymbolResults({ result, selected, onSelect }) {
       <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>
         Each symbol row is that stock's own result, as if it had been backtested alone with this run's settings
         and the full starting capital — so its total return, drawdown and Sharpe are its own, not its slice of
-        the portfolio. The blended portfolio equal-weights the symbols. Yearly figures add up to the total return
-        (the first and last calendar year are usually partial).
+        the portfolio. The blended portfolio gives every symbol an equal slice for as long as it has data, so its
+        total return is the average of the symbols' total returns (a symbol that starts later, such as a recent
+        listing, only joins the mix from its first bar, which is why the two can differ a little). Yearly figures
+        add up to the total return (the first and last calendar year are usually partial).
       </p>
     </div>
   );
