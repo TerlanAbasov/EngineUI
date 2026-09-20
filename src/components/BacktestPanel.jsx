@@ -64,9 +64,8 @@ export default function BacktestPanel() {
   const [showAdv, setShowAdv] = useState(false);
   const [lbNames, setLbNames] = useState([]);      // run-all: run only this subset of strategies (empty = all)
   const [lbNameSearch, setLbNameSearch] = useState("");
-  const [coverage, setCoverage] = useState([]);   // [{ symbol, firstBar, lastBar, bars, fresh }]
+  const [coverage, setCoverage] = useState(null); // [{ symbol, firstBar, lastBar, bars, fresh }] — null until loaded (or if the call failed)
   const [universe, setUniverse] = useState(null); // ["MU", ...] — null until loaded
-  const [showStale, setShowStale] = useState(false);
   const [leaderboard, setLeaderboard] = useState(null);
   const [sort, setSort] = useState(null); // { key, type: "num"|"str", dir: 1|-1 }
   const [result, setResult] = useState(null);
@@ -147,25 +146,25 @@ export default function BacktestPanel() {
     const next = cur.includes(sym) ? cur.filter((s) => s !== sym) : [...cur, sym];
     return { ...f, symbols: next.join(" ") };
   });
-  // The Universe page is the single source of truth for which symbols the app works with, so
-  // only universe symbols are offered here — a symbol removed there must not linger in this
-  // picker just because its bars are still cached (coverage is every symbol with cached bars).
-  const scoped = useMemo(() => {
+  // The Universe page is the single source of truth for which symbols the app works with, so the
+  // picker lists exactly the universe symbols, in the universe's order — nothing is hidden and
+  // nothing else appears (a symbol removed there must not linger here just because its bars are
+  // still cached). Cached-bar coverage only decorates a chip: stale (newest bar is old) or no data
+  // at all; it never decides whether the symbol is listed. If coverage failed to load, no chip is
+  // marked, so every symbol stays selectable.
+  const universeChips = useMemo(() => {
     if (!universe) return [];
-    const inUniverse = new Set(universe);
-    return coverage.filter((c) => inUniverse.has(c.symbol));
+    const bySym = new Map((coverage || []).map((c) => [c.symbol, c]));
+    return universe.map((symbol) => {
+      const cov = bySym.get(symbol) || null;
+      return { symbol, cov, noData: coverage != null && cov == null, stale: cov != null && !cov.fresh };
+    });
   }, [coverage, universe]);
-  // universe symbols that can't be backtested yet because no bars are cached for them
-  const missingData = useMemo(() => {
-    if (!universe) return [];
-    const have = new Set(coverage.map((c) => c.symbol));
-    return universe.filter((s) => !have.has(s));
-  }, [coverage, universe]);
-  const freshCount = useMemo(() => scoped.filter((c) => c.fresh).length, [scoped]);
-  const pickable = useMemo(
-    () => (showStale ? scoped : scoped.filter((c) => c.fresh)),
-    [scoped, showStale]);
-  const addAllSymbols = () => upd("symbols", pickable.map((c) => c.symbol).join(" "));
+  const staleCount = universeChips.filter((c) => c.stale).length;
+  const noDataSymbols = universeChips.filter((c) => c.noData).map((c) => c.symbol);
+  const chipTimeframe = universeChips.find((c) => c.cov)?.cov.timeframe;
+  const addAllSymbols = () =>
+    upd("symbols", universeChips.filter((c) => !c.noData).map((c) => c.symbol).join(" "));
 
   const ensembleBody = () => ({
     strategyNames: form.ensembleNames.trim()
@@ -412,42 +411,38 @@ export default function BacktestPanel() {
                 <div style={{ gridColumn: "1 / -1" }}>
                   <div className="muted" style={{ fontSize: 11, marginBottom: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <span>
-                      {freshCount} universe symbol{freshCount === 1 ? "" : "s"} with fresh data
-                      {scoped[0]?.timeframe ? ` @ ${scoped[0].timeframe}` : ""} — click to add / remove
-                      {scoped.length > freshCount && (
-                        <>
-                          {" · "}
-                          <span className="row-click" onClick={() => setShowStale((v) => !v)}>
-                            {showStale ? "hide stale" : `show ${scoped.length - freshCount} stale`}
-                          </span>
-                        </>
-                      )}
+                      {universe.length} universe symbol{universe.length === 1 ? "" : "s"}
+                      {chipTimeframe ? ` @ ${chipTimeframe}` : ""} — click to add / remove
+                      {staleCount > 0 && ` · ${staleCount} in amber: data not refreshed recently (hover for the last bar)`}
                     </span>
-                    {pickable.length > 0 && (
+                    {universeChips.some((c) => !c.noData) && (
                       <button type="button" className="secondary xs" onClick={addAllSymbols}>add all</button>
                     )}
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4, maxHeight: 108, overflow: "auto" }}>
-                    {pickable.map((c) => {
+                    {universeChips.map((c) => {
                       const on = selectedSyms.has(c.symbol);
+                      const title = c.noData
+                        ? "No cached data yet — pull it on the Universe page to backtest it"
+                        : `${c.cov ? `${c.cov.bars} ${c.cov.timeframe || ""} bars · last ${fmtDate(c.cov.lastBar)}` : "coverage unavailable"}${c.stale ? " · stale" : ""}`;
                       return (
-                        <span key={c.symbol} className="tag row-click"
-                              title={`${c.bars} ${c.timeframe || ""} bars · last ${fmtDate(c.lastBar)}${c.fresh ? "" : " · stale"}`}
-                              onClick={() => toggleSymbol(c.symbol)}
+                        <span key={c.symbol} className={c.noData ? "tag" : "tag row-click"} title={title}
+                              aria-disabled={c.noData || undefined}
+                              onClick={c.noData ? undefined : () => toggleSymbol(c.symbol)}
                               style={{
-                                cursor: "pointer",
+                                cursor: c.noData ? "not-allowed" : "pointer",
+                                opacity: c.noData ? 0.45 : 1,
                                 borderColor: on ? "var(--accent)" : undefined,
-                                color: on ? "var(--accent)" : c.fresh ? undefined : "#5b6570",
+                                color: on ? "var(--accent)" : c.stale ? "var(--amber)" : undefined,
                               }}>
                           {on ? "✓ " : ""}{c.symbol}
                         </span>
                       );
                     })}
-                    {pickable.length === 0 && <span className="muted" style={{ fontSize: 12 }}>no symbols with fresh data</span>}
                   </div>
-                  {missingData.length > 0 && (
+                  {noDataSymbols.length > 0 && (
                     <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
-                      No cached data yet for {missingData.join(", ")} — pull it on the Universe page to backtest it.
+                      No cached data yet for {noDataSymbols.join(", ")} — pull it on the Universe page to backtest it.
                     </div>
                   )}
                 </div>
