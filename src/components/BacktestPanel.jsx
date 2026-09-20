@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
-import { fmt, cls, fmtDate, KPI_KEYS, TIMEFRAMES, METRIC_HELP } from "../api/format";
+import { fmt, cls, fmtDate, fmtDuration, KPI_KEYS, TIMEFRAMES, METRIC_HELP } from "../api/format";
+import { useBacktestJob } from "../context/BacktestJobContext";
 import ReportView from "./ReportView";
 import EnsembleReport from "./EnsembleReport";
+import JobProgressPanel from "./JobProgressPanel";
 
 const PAIRS = "__PAIRS__";
 const ENSEMBLE = "__ENSEMBLE__";
@@ -71,8 +73,14 @@ export default function BacktestPanel() {
   const [result, setResult] = useState(null);
   const [ensemble, setEnsemble] = useState(null);
   const [history, setHistory] = useState([]);
-  const [busy, setBusy] = useState(false);
+  // The backtest itself runs on the backend as a job owned by BacktestJobProvider (so it survives leaving
+  // this tab); this page starts it, shows its progress and displays its outcome.
+  const jobCtx = useBacktestJob();
+  const busy = jobCtx.starting || jobCtx.running;
   const [err, setErr] = useState(null);
+  const [notice, setNotice] = useState(null);         // { type: "info" | "error", text }
+  const progressRef = useRef(null);
+  const seenRunningId = useRef(null);                 // the job this page watched running (vs. one that finished while away)
   const [opening, setOpening] = useState(null);   // runId whose report is being fetched
   const [openErr, setOpenErr] = useState(null);   // { id, message } when a report couldn't be opened
   const reportRef = useRef(null);                 // where the opened report renders (below the leaderboard)
@@ -225,23 +233,59 @@ export default function BacktestPanel() {
 
   const run = async () => {
     openSeq.current++;
-    setBusy(true); setErr(null); setResult(null); setOpenErr(null); setOpening(null); setLeaderboard(null); setSort(null); setEnsemble(null);
+    setErr(null); setNotice(null); setResult(null); setOpenErr(null); setOpening(null); setLeaderboard(null); setSort(null); setEnsemble(null);
     setLbStrat(""); setLbSymbol("");
     try {
+      let kind, payload;
       if (isPairs) {
         if (!form.symbolA.trim() || !form.symbolB.trim()) throw new Error("Enter both pair symbols");
-        setResult(await api.pairs(pairsBody()));
+        kind = "pairs"; payload = pairsBody();
       } else if (isEnsemble) {
-        setEnsemble(await api.ensemble(ensembleBody()));
+        kind = "ensemble"; payload = ensembleBody();
       } else if (form.strategyName === "ALL") {
-        setLeaderboard(await api.runAll(body()));
+        kind = "run-all"; payload = body();
       } else {
-        setResult(await api.backtest(body()));
+        kind = "run"; payload = body();
       }
+      const job = await jobCtx.start(kind, payload);
+      seenRunningId.current = job.id;
+      requestAnimationFrame(() => progressRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
+    } catch (e) {
+      if (e.conflict) setNotice({ type: "info", text: e.message });
+      else setErr(e.message);
+    }
+  };
+
+  // Remember which job this page has watched running: one that finished while we were on another tab
+  // is announced as such when its result is shown.
+  useEffect(() => {
+    if (jobCtx.running && jobCtx.job) seenRunningId.current = jobCtx.job.id;
+  }, [jobCtx.running, jobCtx.job?.id]);           // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A finished job's outcome is shown once: right away if we were watching, or on returning to this page.
+  const { pendingOutcome, consume } = jobCtx;
+  useEffect(() => {
+    const j = pendingOutcome;
+    if (!j) return;
+    const whileAway = seenRunningId.current !== j.id;
+    openSeq.current++;
+    if (j.status === "COMPLETED") {
+      setErr(null); setOpenErr(null); setOpening(null); setResult(null); setLeaderboard(null); setEnsemble(null);
+      setSort(null); setLbStrat(""); setLbSymbol("");
+      if (j.kind === "RUN_ALL") setLeaderboard(Array.isArray(j.result) ? j.result : []);
+      else if (j.kind === "ENSEMBLE") setEnsemble(j.result || null);
+      else setResult(j.result || null);
+      setNotice(whileAway
+        ? { type: "info", text: `Your backtest finished while you were away (took ${fmtDuration(j.elapsedMs)}).` } : null);
       loadHistory();
       loadHistoryMeta();
-    } catch (e) { setErr(e.message); } finally { setBusy(false); }
-  };
+    } else if (j.status === "FAILED") {
+      setNotice({ type: "error", text: `Backtest failed: ${j.error || "unknown error"}` });
+    } else if (j.status === "CANCELLED") {
+      setNotice({ type: "info", text: "Backtest cancelled — nothing from it was saved." });
+    }
+    consume(j.id);
+  }, [pendingOutcome?.id]);                        // eslint-disable-line react-hooks/exhaustive-deps
 
   // The report renders below the leaderboard / form, so scroll *to it* — scrolling to the top of
   // the page (as this used to) left it off-screen and made a row click look like it did nothing.
@@ -588,6 +632,19 @@ export default function BacktestPanel() {
         )}
         {err && <div className="neg" style={{ marginTop: 10 }}>{err}</div>}
       </div>
+
+      {jobCtx.running && jobCtx.job && (
+        <div ref={progressRef} style={{ scrollMarginTop: 12 }}>
+          <JobProgressPanel job={jobCtx.job} linkLost={jobCtx.linkLost} onCancel={jobCtx.cancel} />
+        </div>
+      )}
+
+      {notice && (
+        <div className="panel notice" role="status">
+          <span className={notice.type === "error" ? "neg" : undefined}>{notice.text}</span>
+          <button className="secondary xs" onClick={() => setNotice(null)}>dismiss</button>
+        </div>
+      )}
 
       {leaderboard && (
         <div className="panel" ref={boardRef}>

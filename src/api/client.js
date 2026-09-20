@@ -7,15 +7,19 @@ async function req(path, opts = {}) {
   });
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
+    let body = null;
     try {
-      const body = await res.json();
+      body = await res.json();
       // GlobalExceptionHandler only wraps a few exception types as {error}; anything
       // else falls back to Spring Boot's default body ({timestamp,status,error,path,
       // message}), where the useful text is in `message` instead.
       if (body.error) msg = body.error;
       else if (body.message) msg = body.message;
     } catch (_) {}
-    throw new Error(msg);
+    const err = new Error(msg);
+    err.status = res.status;   // callers tell "not found" / "conflict" from a network failure (no status)
+    err.body = body;
+    throw err;
   }
   const text = await res.text();
   return text ? JSON.parse(text) : null;
@@ -72,6 +76,12 @@ export const api = {
   pairs: (body) => req("/backtests/pairs", { method: "POST", body: JSON.stringify(body) }),
   ensemble: (body) => req("/backtests/ensemble", { method: "POST", body: JSON.stringify(body) }),
   getRun: (id) => req(`/backtests/${id}`),
+  // Background jobs: kind = "run" | "run-all" | "pairs" | "ensemble". Starting returns the job at once (202);
+  // a second start while one runs is refused with 409 and { activeJob } in err.body.
+  startJob: (kind, body) => req(`/backtests/jobs/${kind}`, { method: "POST", body: JSON.stringify(body) }),
+  getJob: (id) => req(`/backtests/jobs/${encodeURIComponent(id)}`),
+  activeJobs: () => req("/backtests/jobs/active"),
+  cancelJob: (id) => req(`/backtests/jobs/${encodeURIComponent(id)}/cancel`, { method: "POST" }),
   // One page of a run's trades. params: { symbol, side: "LONG"|"SHORT", sort, dir: "asc"|"desc", page, size }
   getTrades: (id, params = {}) => {
     const p = new URLSearchParams();

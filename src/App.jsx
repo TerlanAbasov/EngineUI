@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "./api/client";
+import { useBacktestJob } from "./context/BacktestJobContext";
 import StrategyTable from "./components/StrategyTable";
 import UniverseEditor from "./components/UniverseEditor";
 import BacktestPanel from "./components/BacktestPanel";
@@ -55,6 +56,7 @@ const TABS = [
 export default function App() {
   const [tab, setTab] = useState("backtest");
   const [source, setSource] = useState(null);
+  const { job, running, pendingOutcome } = useBacktestJob();
 
   useEffect(() => { api.source().then((s) => setSource(s.source)).catch(() => {}); }, []);
 
@@ -89,6 +91,14 @@ export default function App() {
                        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setTab(id)}>
                     <span className="tab-icon">{ICONS[id]}</span>
                     <span>{label}</span>
+                    {id === "backtest" && running && (
+                      <span className="tab-badge" title={`Backtest running · ${job.percent}%`}>{job.percent}%</span>
+                    )}
+                    {id === "backtest" && !running && pendingOutcome && tab !== "backtest" && (
+                      <span className="tab-badge done" title="A backtest finished — open the tab to see it">
+                        {pendingOutcome.status === "COMPLETED" ? "✓" : "!"}
+                      </span>
+                    )}
                   </div>
                 </div>
               );

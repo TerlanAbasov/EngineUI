@@ -152,3 +152,11 @@ export function downsample(arr, max = 400) {
   const step = Math.ceil(arr.length / max);
   return arr.filter((_, i) => i % step === 0);
 }
+
+/** 75_000 ms -> "1:15"; an hour or more -> "1:02:03". */
+export const fmtDuration = (ms) => {
+  const total = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
+  const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), sec = total % 60;
+  const two = (n) => String(n).padStart(2, "0");
+  return h > 0 ? `${h}:${two(m)}:${two(sec)}` : `${m}:${two(sec)}`;
+};
