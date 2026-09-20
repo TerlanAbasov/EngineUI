@@ -4,7 +4,7 @@ import {
   BarChart,
 } from "recharts";
 import { api } from "../api/client";
-import { fmt, fmtDateTime, TIMEFRAMES } from "../api/format";
+import { fmt, fmtDate, fmtDateTime, TIMEFRAMES } from "../api/format";
 
 const AXIS = { stroke: "#8b949e", fontSize: 11 };
 const GRID = "#2a3441";
@@ -110,7 +110,8 @@ function ChartTip({ active, payload }) {
 }
 
 export default function ChartView() {
-  const [symbols, setSymbols] = useState([]);
+  const [universe, setUniverse] = useState(null);   // ["MU", ...] — null until loaded (or if the call failed)
+  const [coverage, setCoverage] = useState(null);   // cached-bar coverage rows — null until loaded (or if it failed)
   const [stratNames, setStratNames] = useState([]);
   const [form, setForm] = useState({
     symbol: "", timeframe: "D1", start: "", end: "", limit: 1500,
@@ -127,13 +128,32 @@ export default function ChartView() {
   const upd = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   useEffect(() => {
-    api.dataSymbols().then((rows) => {
-      setSymbols(rows || []);
-      if (rows?.length && !form.symbol) upd("symbol", rows[0].symbol);
-    }).catch(() => {});
-    api.strategies().then((rows) => setStratNames((rows || []).map((r) => r.name))).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let cancelled = false;
+    Promise.all([api.universe().catch(() => null), api.dataSymbols().catch(() => null)]).then(([u, c]) => {
+      if (cancelled) return;
+      setUniverse(u); setCoverage(c);
+      // start on the first universe symbol that has bars to chart (first universe symbol if none do)
+      const have = new Set((c || []).map((r) => r.symbol));
+      const list = u ?? (c || []).map((r) => r.symbol);
+      const first = list.find((sym) => have.has(sym)) ?? list[0];
+      if (first) setForm((f) => (f.symbol ? f : { ...f, symbol: first }));
+    });
+    api.strategies().then((rows) => !cancelled && setStratNames((rows || []).map((r) => r.name))).catch(() => {});
+    return () => { cancelled = true; };
   }, []);
+
+  // The Universe page decides which symbols exist, so the suggestions are exactly the universe
+  // symbols, in its order — a symbol removed there must not linger here just because its bars are
+  // still cached. Coverage only decorates a chip (stale / no bars to chart). If the universe could
+  // not be loaded, fall back to the cached symbols so the page stays usable.
+  const symbolChips = useMemo(() => {
+    const bySym = new Map((coverage || []).map((r) => [r.symbol, r]));
+    const list = universe ?? (coverage || []).map((r) => r.symbol);
+    return list.map((symbol) => {
+      const cov = bySym.get(symbol) || null;
+      return { symbol, cov, noData: coverage != null && cov == null, stale: cov != null && !cov.fresh };
+    });
+  }, [universe, coverage]);
 
   const load = async (opts = {}) => {
     const sym = form.symbol.trim().toUpperCase();
@@ -256,13 +276,44 @@ export default function ChartView() {
       </div>
 
       <div className="form-grid" style={{ marginTop: 12 }}>
+        {symbolChips.length > 0 && (
+          <div style={{ gridColumn: "1 / -1" }}>
+            <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>
+              {symbolChips.length} universe symbol{symbolChips.length === 1 ? "" : "s"} — click to chart
+              {symbolChips.some((c) => c.stale) && " · amber = data not refreshed recently"}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+              {symbolChips.map((c) => {
+                const on = form.symbol.trim().toUpperCase() === c.symbol;
+                const title = c.noData
+                  ? "No cached data yet — pull it on the Universe page to chart it"
+                  : c.cov ? `${c.cov.bars} ${c.cov.timeframe || ""} bars · last ${fmtDate(c.cov.lastBar)}${c.stale ? " · stale" : ""}` : "coverage unavailable";
+                return (
+                  <span key={c.symbol} className={c.noData ? "tag" : "tag row-click"} title={title}
+                        aria-disabled={c.noData || undefined}
+                        onClick={c.noData ? undefined : () => upd("symbol", c.symbol)}
+                        style={{
+                          cursor: c.noData ? "not-allowed" : "pointer",
+                          opacity: c.noData ? 0.45 : 1,
+                          borderColor: on ? "var(--accent)" : undefined,
+                          color: on ? "var(--accent)" : c.stale ? "var(--amber)" : undefined,
+                        }}>
+                    {on ? "✓ " : ""}{c.symbol}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <div>
           <label>Symbol</label>
           <input list="chart-symbols" style={{ width: "100%" }} placeholder="AAPL"
                  value={form.symbol} onChange={(e) => upd("symbol", e.target.value)}
                  onKeyDown={(e) => e.key === "Enter" && load()} />
           <datalist id="chart-symbols">
-            {symbols.map((s) => <option key={s.symbol} value={s.symbol}>{s.symbol} · {s.bars} {s.timeframe} bars</option>)}
+            {symbolChips.filter((c) => !c.noData).map((c) => (
+              <option key={c.symbol} value={c.symbol}>{c.cov ? `${c.symbol} · ${c.cov.bars} ${c.cov.timeframe} bars` : c.symbol}</option>
+            ))}
           </datalist>
         </div>
         <div>
