@@ -1,12 +1,12 @@
 import { useState } from "react";
 
-/** Order / cycle / trade status as a coloured pill. */
+/** Order / cycle / trade / command status as a coloured pill. */
 export function StatusPill({ value }) {
   if (!value) return null;
   const v = String(value).toUpperCase();
-  const tone = ["FILLED", "COMPLETED"].includes(v) ? "good"
+  const tone = ["FILLED", "COMPLETED", "SENT"].includes(v) ? "good"
     : ["REJECTED", "FAILED"].includes(v) ? "bad"
-      : ["CANCELED", "PARTIAL", "SKIPPED"].includes(v) ? "warn" : "neutral";
+      : ["CANCELED", "PARTIAL", "SKIPPED", "PENDING"].includes(v) ? "warn" : "neutral";
   return <span className={`pill ${tone}`}>{v.replace("_", " ")}</span>;
 }
 

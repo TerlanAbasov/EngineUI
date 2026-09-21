@@ -61,7 +61,7 @@ export default function Scanner() {
         {" "}
         {exec.configured
           ? "ExecutionEngine forwarding is configured — use “Forward” on a LONG/SHORT row to push it now."
-          : "ExecutionEngine forwarding is not configured (set quantplat.execution-engine.base-url on the backend)."}
+          : "ExecutionEngine forwarding is not configured (set decision.execution-engine.url on the backend)."}
       </p>
       {err && <div className="neg" style={{ marginBottom: 8 }}>{err}</div>}
       {msg && <div className="pos" style={{ marginBottom: 8 }}>{msg}</div>}

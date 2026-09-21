@@ -146,7 +146,14 @@ export const api = {
     }),
   signals: () => req("/signals"),
 
-  // ExecutionEngine forwarding — POST /api/execution/{status,send}
-  executionStatus: () => req("/execution/status"),
-  sendSignal: (signal) => req("/execution/send", { method: "POST", body: JSON.stringify(signal) }),
+  // Auto trading: the job that sends strategy signals to ExecutionEngine as BUY / SELL commands — /api/autotrade/*
+  autoTradeStatus: () => req("/autotrade/status"),
+  enableAutoTrade: () => req("/autotrade/enable", { method: "POST" }),
+  disableAutoTrade: () => req("/autotrade/disable", { method: "POST" }),
+  // { quantity, orderType: "MKT"|"LMT", tif: "DAY"|"GTC", strategyNames, symbols, maxCommandsPerRun } — the switch is left as it is
+  saveAutoTradeSettings: (settings) => req("/autotrade/settings", { method: "PUT", body: JSON.stringify(settings) }),
+  autoTradeCommands: (page = 0, size = 50) => req(`/autotrade/commands?page=${page}&size=${size}`),
+  // The Scanner's "Forward" button: one signal, now, with the saved quantity. executionStatus says whether ExecutionEngine is configured.
+  executionStatus: () => req("/autotrade/status"),
+  sendSignal: (signal) => req("/autotrade/forward", { method: "POST", body: JSON.stringify(signal) }),
 };

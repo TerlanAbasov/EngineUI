@@ -32,8 +32,11 @@ npm run build      # production bundle in dist/
   `POST /api/universe`, remove replaces via `PUT`, plus data pull).
 - **Scanner** — current signals across enabled strategies. Loads the last
   persisted signals (`GET /api/signals`) on open, and — when the backend has
-  `quantplat.execution-engine.base-url` set — can forward a LONG/SHORT row to
-  ExecutionEngine (`POST /api/execution/send`).
+  `decision.execution-engine.url` set — can forward a LONG/SHORT row to
+  ExecutionEngine (`POST /api/autotrade/forward`).
+- **Auto Trading** — the on/off switch for the job that sends ExecutionEngine a BUY / SELL whenever
+  a strategy turns LONG or SHORT on a completed bar (each in its own timeframe, for the whole Universe
+  or a chosen list); quantity and order settings, and the log of every command with ExecutionEngine's answer.
 - **Execution** — a command console for ExecutionEngine itself (paper account
   `DU8704817`): manual trade commands (buy/sell/close-all/cancel), account &amp;
   PnL/positions requests, a raw TradingView-alert sender, and engine start/stop/
