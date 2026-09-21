@@ -1,29 +1,48 @@
 const BASE = import.meta.env.VITE_API_BASE || "";
 
+// The Error a failed response becomes: its message is the server's, and `status` / `body` let callers tell
+// "not found" / "conflict" from a network failure (no status).
+async function httpError(res) {
+  let msg = `HTTP ${res.status}`;
+  let body = null;
+  try {
+    body = await res.json();
+    // GlobalExceptionHandler only wraps a few exception types as {error}; anything
+    // else falls back to Spring Boot's default body ({timestamp,status,error,path,
+    // message}), where the useful text is in `message` instead.
+    if (body.error) msg = body.error;
+    else if (body.message) msg = body.message;
+  } catch (_) {}
+  const err = new Error(msg);
+  err.status = res.status;
+  err.body = body;
+  return err;
+}
+
 async function req(path, opts = {}) {
   const res = await fetch(`${BASE}/api${path}`, {
     headers: { "Content-Type": "application/json" },
     ...opts,
   });
-  if (!res.ok) {
-    let msg = `HTTP ${res.status}`;
-    let body = null;
-    try {
-      body = await res.json();
-      // GlobalExceptionHandler only wraps a few exception types as {error}; anything
-      // else falls back to Spring Boot's default body ({timestamp,status,error,path,
-      // message}), where the useful text is in `message` instead.
-      if (body.error) msg = body.error;
-      else if (body.message) msg = body.message;
-    } catch (_) {}
-    const err = new Error(msg);
-    err.status = res.status;   // callers tell "not found" / "conflict" from a network failure (no status)
-    err.body = body;
-    throw err;
-  }
+  if (!res.ok) throw await httpError(res);
   const text = await res.text();
   return text ? JSON.parse(text) : null;
 }
+
+// A file the server sends as an attachment: { blob, filename } (the name the server chose, else `fallbackName`).
+async function download(path, fallbackName) {
+  const res = await fetch(`${BASE}/api${path}`);
+  if (!res.ok) throw await httpError(res);
+  const named = /filename="?([^";]+)"?/.exec(res.headers.get("Content-Disposition") || "");
+  return { blob: await res.blob(), filename: named ? named[1] : fallbackName };
+}
+
+const queryString = (params) => {
+  const p = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => { if (v != null && v !== "") p.set(k, v); });
+  const qs = p.toString();
+  return qs ? `?${qs}` : "";
+};
 
 export const api = {
   strategies: (opts = {}) => req(`/strategies${opts.includeArchived ? "?includeArchived=true" : ""}`),
@@ -83,12 +102,9 @@ export const api = {
   activeJobs: () => req("/backtests/jobs/active"),
   cancelJob: (id) => req(`/backtests/jobs/${encodeURIComponent(id)}/cancel`, { method: "POST" }),
   // One page of a run's trades. params: { symbol, side: "LONG"|"SHORT", sort, dir: "asc"|"desc", page, size }
-  getTrades: (id, params = {}) => {
-    const p = new URLSearchParams();
-    Object.entries(params).forEach(([k, v]) => { if (v != null && v !== "") p.set(k, v); });
-    const qs = p.toString();
-    return req(`/backtests/${id}/trades${qs ? `?${qs}` : ""}`);
-  },
+  getTrades: (id, params = {}) => req(`/backtests/${id}/trades${queryString(params)}`),
+  // Every trade matching the filter, not one page, as an Excel file. params: { symbol, side, sort, dir }
+  exportTrades: (id, params = {}) => download(`/backtests/${id}/trades/export${queryString(params)}`, `trades-run-${id}.xlsx`),
   // opts: { strategy, minReturn, minCagr, minSharpe, minProfitFactor, minWinRate, maxDrawdown, minTrades, sort, dir, limit }
   listRuns: (opts = {}) => {
     const p = new URLSearchParams();

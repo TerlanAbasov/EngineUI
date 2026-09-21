@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { fmt, cls, fmtDateTime, fmtMoney, fmtPx } from "../api/format";
+import { saveFile } from "../api/saveFile";
 
 const PAGE_SIZES = [25, 50, 100, 200];
 const TEXT_SORTS = new Set(["symbol", "side"]);
@@ -33,6 +34,8 @@ export default function TradesTable({ runId, tradeCount, symbols, symbol, onSymb
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [tick, setTick] = useState(0);            // bumped to retry after an error
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState(null);
 
   // The page is remembered together with the filter it belongs to, so changing any filter
   // (or the symbol from the results table above) falls back to page 1 without a second fetch.
@@ -58,6 +61,19 @@ export default function TradesTable({ runId, tradeCount, symbols, symbol, onSymb
       goto(Math.max(0, Math.ceil(data.total / data.size) - 1));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
+
+  // Every trade matching the filters, in the table's sort order (not just the visible page).
+  const exportExcel = async () => {
+    setExporting(true); setExportError(null);
+    try {
+      const { blob, filename } = await api.exportTrades(runId, { symbol, side, sort: sort.key, dir: sort.dir });
+      saveFile(blob, filename);
+    } catch (e) {
+      setExportError(e.message);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (!tradeCount) {
     return (
@@ -112,6 +128,10 @@ export default function TradesTable({ runId, tradeCount, symbols, symbol, onSymb
           <button className="secondary xs" onClick={() => { onSymbolChange(""); setSide(""); }}>clear filters</button>
         )}
         <span className="count">click a header to sort · hover for what it means</span>
+        <button className="secondary xs" style={{ marginLeft: "auto" }} disabled={exporting || !total} onClick={exportExcel}
+                title="Download all trades matching the filters, in this sort order, as an Excel file (with a summary sheet)">
+          {exporting ? "Exporting…" : "Export to Excel"}
+        </button>
       </div>
 
       {s && (
@@ -124,6 +144,13 @@ export default function TradesTable({ runId, tradeCount, symbols, symbol, onSymb
           <span>slippage <b>{fmtMoney(s.slippage)}</b></span>
           <span>avg net <b className={cls(s.avgNetPct)}>{fmt(s.avgNetPct)}%</b></span>
           <span>best <b className="pos">{fmt(s.bestNetPct)}%</b> · worst <b className="neg">{fmt(s.worstNetPct)}%</b></span>
+        </div>
+      )}
+
+      {exportError && (
+        <div className="neg" style={{ marginBottom: 8 }}>
+          Could not export trades: {exportError}{" "}
+          <button className="secondary xs" onClick={exportExcel}>retry</button>
         </div>
       )}
 
