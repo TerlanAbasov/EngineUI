@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
-import { ChipPicker } from "../ui";
+import { ComboPicker } from "../ui";
 
 const toDraft = (s) => ({
   quantity: String(s.quantity), orderType: s.orderType, tif: s.tif, maxCommandsPerRun: String(s.maxCommandsPerRun),
@@ -67,7 +67,7 @@ export default function AutoTradeSettings({ settings, onSaved }) {
     }
   };
 
-  const stratOptions = strategies.map((s) => ({ id: s.name, label: s.name, title: `${s.category || ""}${s.enabled ? "" : " · disabled"}` }));
+  const stratOptions = strategies.map((s) => ({ id: s.name, label: s.name, category: s.category, disabled: !s.enabled }));
   const symbolOptions = universe.map((x) => ({ id: x, label: x }));
 
   return (
@@ -125,12 +125,14 @@ export default function AutoTradeSettings({ settings, onSaved }) {
 
           <fieldset className="wide">
             <legend>Strategies</legend>
-            <ChipPicker options={stratOptions} value={draft.strategyNames} onChange={(v) => upd("strategyNames", v)}
+            <ComboPicker options={stratOptions} value={draft.strategyNames} onChange={(v) => upd("strategyNames", v)}
+                        placeholder="Every enabled strategy, each on its own timeframe"
                         emptyHint="None picked — every enabled strategy is watched, each on its own timeframe." />
           </fieldset>
           <fieldset className="wide">
             <legend>Symbols</legend>
-            <ChipPicker options={symbolOptions} value={draft.symbols} onChange={(v) => upd("symbols", v)}
+            <ComboPicker options={symbolOptions} value={draft.symbols} onChange={(v) => upd("symbols", v)}
+                        placeholder="The whole Universe"
                         emptyHint="None picked — the whole Universe is watched." />
           </fieldset>
         </div>

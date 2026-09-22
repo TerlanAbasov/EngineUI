@@ -5,6 +5,7 @@ import { useBacktestJob } from "../context/BacktestJobContext";
 import ReportView from "./ReportView";
 import EnsembleReport from "./EnsembleReport";
 import JobProgressPanel from "./JobProgressPanel";
+import { ComboPicker } from "./ui";
 
 const PAIRS = "__PAIRS__";
 const ENSEMBLE = "__ENSEMBLE__";
@@ -65,7 +66,6 @@ export default function BacktestPanel() {
   });
   const [showAdv, setShowAdv] = useState(false);
   const [lbNames, setLbNames] = useState([]);      // run-all: run only this subset of strategies (empty = all)
-  const [lbNameSearch, setLbNameSearch] = useState("");
   const [coverage, setCoverage] = useState(null); // [{ symbol, firstBar, lastBar, bars, fresh }] — null until loaded (or if the call failed)
   const [universe, setUniverse] = useState(null); // ["MU", ...] — null until loaded
   const [leaderboard, setLeaderboard] = useState(null);
@@ -138,14 +138,10 @@ export default function BacktestPanel() {
   const isMulti = isEnsemble || isAll;
   const pickedStrategy = strategies.find((s) => s.name === form.strategyName);
   const enabledCount = strategies.filter((s) => s.enabled).length;
-
-  const toggleLbName = (name) =>
-    setLbNames((ns) => (ns.includes(name) ? ns.filter((n) => n !== name) : [...ns, name]));
-  const lbNameChoices = useMemo(() => {
-    const q = lbNameSearch.trim().toLowerCase();
-    return strategies.filter((s) =>
-      !q || s.name.toLowerCase().includes(q) || (s.category || "").toLowerCase().includes(q));
-  }, [strategies, lbNameSearch]);
+  const runAllCount = form.includeDisabled ? strategies.length : enabledCount;
+  const lbNameOptions = useMemo(
+    () => strategies.map((s) => ({ id: s.name, label: s.name, category: s.category, disabled: !s.enabled })),
+    [strategies]);
 
   const parseSyms = (s) => s.split(/[,\s]+/).map((x) => x.trim().toUpperCase()).filter(Boolean);
   const selectedSyms = useMemo(() => new Set(parseSyms(form.symbols)), [form.symbols]);
@@ -453,42 +449,40 @@ export default function BacktestPanel() {
               <div><label>Symbols (blank = universe)</label><input style={{ width: "100%" }} placeholder="AAPL MSFT…" value={form.symbols} onChange={(e) => upd("symbols", e.target.value)} /></div>
               {universe && universe.length > 0 && (
                 <div style={{ gridColumn: "1 / -1" }}>
-                  <div className="muted" style={{ fontSize: 11, marginBottom: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <span>
-                      {universe.length} universe symbol{universe.length === 1 ? "" : "s"}
-                      {chipTimeframe ? ` @ ${chipTimeframe}` : ""} — click to add / remove
-                      {staleCount > 0 && ` · ${staleCount} in amber: data not refreshed recently (hover for the last bar)`}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+                    <span className="count">
+                      {universe.length} universe symbol{universe.length === 1 ? "" : "s"}{chipTimeframe ? ` @ ${chipTimeframe}` : ""}
                     </span>
                     {universeChips.some((c) => !c.noData) && (
                       <button type="button" className="secondary xs" onClick={addAllSymbols}>add all</button>
                     )}
                   </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, maxHeight: 108, overflow: "auto" }}>
+                  <div className="chip-row" style={{ maxHeight: 108, overflow: "auto" }}>
                     {universeChips.map((c) => {
                       const on = selectedSyms.has(c.symbol);
                       const title = c.noData
                         ? "No cached data yet — pull it on the Universe page to backtest it"
                         : `${c.cov ? `${c.cov.bars} ${c.cov.timeframe || ""} bars · last ${fmtDate(c.cov.lastBar)}` : "coverage unavailable"}${c.stale ? " · stale" : ""}`;
                       return (
-                        <span key={c.symbol} className={c.noData ? "tag" : "tag row-click"} title={title}
+                        <span key={c.symbol} className={`tag${c.noData ? "" : " row-click"}${on ? " combo-chip" : ""}`} title={title}
                               aria-disabled={c.noData || undefined}
                               onClick={c.noData ? undefined : () => toggleSymbol(c.symbol)}
                               style={{
                                 cursor: c.noData ? "not-allowed" : "pointer",
                                 opacity: c.noData ? 0.45 : 1,
-                                borderColor: on ? "var(--accent)" : undefined,
-                                color: on ? "var(--accent)" : c.stale ? "var(--amber)" : undefined,
+                                borderColor: !on && c.stale ? "var(--amber)" : undefined,
+                                color: !on && c.stale ? "var(--amber)" : undefined,
                               }}>
-                          {on ? "✓ " : ""}{c.symbol}
+                          {c.symbol}
                         </span>
                       );
                     })}
                   </div>
-                  {noDataSymbols.length > 0 && (
-                    <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
-                      No cached data yet for {noDataSymbols.join(", ")} — pull it on the Universe page to backtest it.
-                    </div>
-                  )}
+                  <div className="legend" style={{ marginTop: 6 }}>
+                    <span><span className="dot accent" />selected — click a symbol to add / remove</span>
+                    {staleCount > 0 && <span><span className="dot amber" />{staleCount} stale — hover for the last bar</span>}
+                    {noDataSymbols.length > 0 && <span><span className="dot muted" />no data yet — pull it on the Universe page</span>}
+                  </div>
                 </div>
               )}
             </>
@@ -496,38 +490,10 @@ export default function BacktestPanel() {
 
           {isAll && (
             <div style={{ gridColumn: "1 / -1" }}>
-              <label>
-                Strategies to run <span className="muted" style={{ textTransform: "none" }}>
-                  ({lbNames.length ? `${lbNames.length} picked` : `none picked — running all ${form.includeDisabled ? strategies.length : enabledCount}`})</span>
-              </label>
-              {lbNames.length > 0 && (
-                <div className="chip-row" style={{ margin: "4px 0" }}>
-                  {lbNames.map((n) => (
-                    <span key={n} className="tag row-click" onClick={() => toggleLbName(n)} title="remove">{n} ✕</span>
-                  ))}
-                  <span className="tag row-click" onClick={() => setLbNames([])} title="clear all">clear</span>
-                </div>
-              )}
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", margin: "4px 0" }}>
-                <input placeholder="search name / category…" value={lbNameSearch}
-                       onChange={(e) => setLbNameSearch(e.target.value)} style={{ flex: "1 1 200px" }} />
-                <button type="button" className="secondary xs"
-                        onClick={() => setLbNames(Array.from(new Set([...lbNames, ...lbNameChoices.map((s) => s.name)])))}>
-                  add {lbNameChoices.length} shown
-                </button>
-              </div>
-              <div className="table-scroll" style={{ maxHeight: 160, padding: "4px 8px" }}>
-                {lbNameChoices.map((s) => (
-                  <label key={s.name} className="row-click"
-                         style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0", textTransform: "none", fontSize: 13 }}>
-                    <input type="checkbox" checked={lbNames.includes(s.name)} onChange={() => toggleLbName(s.name)} />
-                    <span style={{ fontWeight: 600 }}>{s.name}</span>
-                    <span className="tag">{s.category}</span>
-                    {!s.enabled && <span className="muted" style={{ fontSize: 11 }}>disabled</span>}
-                  </label>
-                ))}
-                {lbNameChoices.length === 0 && <div className="muted" style={{ fontSize: 12, padding: 4 }}>no match</div>}
-              </div>
+              <label>Strategies to run</label>
+              <ComboPicker options={lbNameOptions} value={lbNames} onChange={setLbNames}
+                           placeholder={`All ${runAllCount} enabled strateg${runAllCount === 1 ? "y" : "ies"}`}
+                           emptyHint={`None picked — running all ${runAllCount} enabled strateg${runAllCount === 1 ? "y" : "ies"}.`} />
             </div>
           )}
 
