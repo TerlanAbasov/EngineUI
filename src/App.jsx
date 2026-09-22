@@ -7,7 +7,6 @@ import BacktestPanel from "./components/BacktestPanel";
 import Scanner from "./components/Scanner";
 import ChartView from "./components/ChartView";
 import ExecutionConsole from "./components/execution/ExecutionConsole";
-import PaperTrading from "./components/PaperTrading";
 import AutoTrading from "./components/AutoTrading";
 
 const ICON_PROPS = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round" };
@@ -46,9 +45,6 @@ const ICONS = {
   autotrade: (
     <svg {...ICON_PROPS}><path d="M4 12l16-8-6 16-3-7-7-1z" /><path d="M11 13l9-9" /></svg>
   ),
-  paper: (
-    <svg {...ICON_PROPS}><path d="M4 5h11l5 5v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5z" /><path d="M15 5v5h5" /><path d="M8 14h8M8 17h5" /></svg>
-  ),
 };
 
 // [id, label, group] — group renders as a small heading above the first tab in it.
@@ -58,7 +54,6 @@ const TABS = [
   ["strategies", "Strategies", "Research"],
   ["universe", "Universe", "Research"],
   ["scanner", "Scanner", "Research"],
-  ["paper", "Paper Trading", "Live trading"],
   ["autotrade", "Auto Trading", "Live trading"],
   ["execution", "Execution", "Live trading"],
 ];
@@ -122,7 +117,6 @@ export default function App() {
           {tab === "strategies" && <StrategyTable />}
           {tab === "universe" && <UniverseEditor />}
           {tab === "scanner" && <Scanner />}
-          {tab === "paper" && <PaperTrading />}
           {tab === "autotrade" && <AutoTrading />}
           {tab === "execution" && <ExecutionConsole />}
         </div>

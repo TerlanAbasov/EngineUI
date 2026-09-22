@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
-import { ChipPicker } from "../paper/ui";
+import { ChipPicker } from "../ui";
 
 const toDraft = (s) => ({
   quantity: String(s.quantity), orderType: s.orderType, tif: s.tif, maxCommandsPerRun: String(s.maxCommandsPerRun),

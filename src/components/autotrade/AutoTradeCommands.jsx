@@ -2,7 +2,7 @@ import { useState } from "react";
 import { api } from "../../api/client";
 import { fmt, fmtPx, fmtDateTime } from "../../api/format";
 import { usePolling } from "../../hooks/usePolling";
-import { Pager, StatusPill } from "../paper/ui";
+import { Pager, StatusPill } from "../ui";
 
 const SIZE = 25;
 
