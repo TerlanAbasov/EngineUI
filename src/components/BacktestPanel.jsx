@@ -91,13 +91,14 @@ export default function BacktestPanel() {
   const HIST_LIMIT = 500;
   const [histStrat, setHistStrat] = useState("all");
   const [histSymbol, setHistSymbol] = useState("all");
-  const [histSort, setHistSort] = useState({ key: "totalReturnPct", dir: -1 });   // most returns first
+  const [histSort, setHistSort] = useState({ key: "runId", dir: -1 });   // newest run first
   const [histFilters, setHistFilters] = useState({
     minReturn: "", minCagr: "", minSharpe: "", minProfitFactor: "", minWinRate: "", maxDrawdown: "", minTrades: "",
   });
   const [histStratOptions, setHistStratOptions] = useState(["all"]);
   const [histSymbolOptions, setHistSymbolOptions] = useState([]);
   const [histTotal, setHistTotal] = useState(0);
+  const [histLoading, setHistLoading] = useState(false);
 
   const histParams = () => ({
     strategy: histStrat === "all" ? "" : histStrat,
@@ -107,7 +108,10 @@ export default function BacktestPanel() {
     dir: histSort.dir === -1 ? "desc" : "asc",
     limit: HIST_LIMIT,
   });
-  const loadHistory = () => api.listRuns(histParams()).then(setHistory).catch(() => {});
+  const loadHistory = () => {
+    setHistLoading(true);
+    return api.listRuns(histParams()).then(setHistory).catch(() => {}).finally(() => setHistLoading(false));
+  };
   const loadHistoryMeta = () =>
     api.listRuns({ limit: 2000 }).then((rows) => {
       setHistTotal(rows.length);
@@ -700,10 +704,10 @@ export default function BacktestPanel() {
         )}
       </div>
 
-      {histTotal > 0 && (
+      {(histTotal > 0 || histLoading) && (
         <div className="panel">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
-            <h3 style={{ margin: 0 }}>Run history <span className="muted">
+            <h3 style={{ margin: 0 }}>Run history {histLoading && <span className="jspin" title="Loading…" />} <span className="muted">
               ({history.length}{history.length !== histTotal ? ` of ${histTotal}` : ""} — click a header to sort · hover it for what it means · click a row to reload)</span></h3>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <span className="muted" style={{ fontSize: 12 }}>keep top</span>
@@ -761,7 +765,7 @@ export default function BacktestPanel() {
                       onClick={() => { resetFilters(); setHistStrat("all"); setHistSymbol("all"); }}>clear filters</button>}
           </div>
 
-          <div className="table-scroll" style={{ maxHeight: 340 }}>
+          <div className="table-scroll" style={{ maxHeight: 340, opacity: histLoading ? 0.55 : 1, transition: "opacity .15s" }}>
             <table>
               <thead>
                 <tr>
@@ -793,7 +797,7 @@ export default function BacktestPanel() {
                   </tr>
                 ))}
                 {history.length === 0 && (
-                  <tr><td colSpan={HIST_COLS.length + 6} className="empty">No runs match these filters.</td></tr>
+                  <tr><td colSpan={HIST_COLS.length + 6} className="empty">{histLoading ? "Loading…" : "No runs match these filters."}</td></tr>
                 )}
               </tbody>
             </table>
