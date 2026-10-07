@@ -13,14 +13,18 @@ export const fmtPx = (v) =>
   v === null || v === undefined || Number.isNaN(v) ? "–" : Number(v).toFixed(Math.abs(v) < 10 ? 4 : 2);
 
 // The backend serialises every timestamp as an ISO-8601 instant (e.g.
-// "2020-01-02T00:00:00Z") since the bar-interval-timestamps migration. Render the
-// calendar date, and only add the clock when the bar isn't at UTC midnight
+// "2020-01-02T00:00:00Z") since the bar-interval-timestamps migration, and everything
+// is UTC end to end (bar times, run dates, trade entries/exits) — there is no mixed
+// or local-time data anywhere to convert. These render that same instant, never the
+// viewer's browser timezone, and say "UTC" on every value so it reads unambiguously
+// next to a broker chart that labels its own (often different) timezone explicitly.
+// Render the calendar date, and only add the clock when the bar isn't at UTC midnight
 // (intraday timeframes like 1Hour / 15Min).
 export const fmtDate = (v) => {
   if (!v) return "–";
   const d = new Date(v);
   if (Number.isNaN(d.getTime())) return String(v);
-  return d.toISOString().slice(0, 10);
+  return `${d.toISOString().slice(0, 10)} UTC`;
 };
 
 export const fmtDateTime = (v) => {
@@ -28,7 +32,8 @@ export const fmtDateTime = (v) => {
   const d = new Date(v);
   if (Number.isNaN(d.getTime())) return String(v);
   const iso = d.toISOString();
-  return iso.endsWith("T00:00:00.000Z") ? iso.slice(0, 10) : iso.slice(0, 16).replace("T", " ");
+  const stamp = iso.endsWith("T00:00:00.000Z") ? iso.slice(0, 10) : iso.slice(0, 16).replace("T", " ");
+  return `${stamp} UTC`;
 };
 
 // Metric keys shown in the KPI grid / leaderboard, in display order.
