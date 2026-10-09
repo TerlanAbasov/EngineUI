@@ -16,7 +16,6 @@ export default function AutoTradeStatus({ status, error, onChanged }) {
   }
   const s = status.settings;
   const last = status.lastRun;
-  const blocked = !s.enabled && !status.configured;
 
   const change = async (action, okText) => {
     setBusy(true); setMsg(null);
@@ -61,16 +60,12 @@ export default function AutoTradeStatus({ status, error, onChanged }) {
         <div className="paper-actions">
           <span className={`pill ${s.enabled ? "good" : "neutral"} big`}
                 title={s.enabled ? "Signals are being sent to ExecutionEngine." : "Nothing is evaluated or sent."}>{s.enabled ? "ON" : "OFF"}</span>
-          <button onClick={toggle} disabled={busy || blocked}
-                  title={blocked ? "ExecutionEngine is not configured" : undefined}>
+          <button onClick={toggle} disabled={busy}>
             {busy ? "…" : s.enabled ? "Stop auto trading" : "Start auto trading"}
           </button>
         </div>
       </div>
 
-      {!status.configured && (
-        <div className="job-warn">ExecutionEngine is not configured, so nothing can be sent. Set <code>decision.execution-engine.url</code> (env <code>EXECUTION_ENGINE_URL</code>) on the backend and restart it.</div>
-      )}
       {msg && <div className={msg.type === "error" ? "neg" : "muted"} style={{ marginTop: 8, fontSize: 13 }}>{msg.text}</div>}
       {error && <div className="job-warn">Status not refreshing: {error}</div>}
 

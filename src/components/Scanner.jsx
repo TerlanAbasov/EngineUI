@@ -10,16 +10,13 @@ export default function Scanner() {
   const [includeFlat, setIncludeFlat] = useState(false);
   const [timeframe, setTimeframe] = useState("AUTO");
   const [stale, setStale] = useState(false); // rows came from /api/signals, not a fresh scan
-  const [exec, setExec] = useState({ configured: false });
   const [sending, setSending] = useState(null);
 
-  // On mount, show the most recent persisted signals (from the poller or a prior
-  // scan) and check whether ExecutionEngine forwarding is wired up.
+  // On mount, show the most recent persisted signals (from the poller or a prior scan).
   useEffect(() => {
     api.signals()
       .then((s) => { if (s && s.length) { setRows(s); setStale(true); } })
       .catch(() => {});
-    api.executionStatus().then(setExec).catch(() => {});
   }, []);
 
   const scan = async () => {
@@ -59,9 +56,7 @@ export default function Scanner() {
       <p className="muted" style={{ marginTop: 0 }}>
         Runs every enabled strategy across the universe and reports the current position each rule would hold today.
         {" "}
-        {exec.configured
-          ? "ExecutionEngine forwarding is configured — use “Forward” on a LONG/SHORT row to push it now."
-          : "ExecutionEngine forwarding is not configured (set decision.execution-engine.url on the backend)."}
+        Use “Forward” on a LONG/SHORT row to push it to ExecutionEngine now.
       </p>
       {err && <div className="neg" style={{ marginBottom: 8 }}>{err}</div>}
       {msg && <div className="pos" style={{ marginBottom: 8 }}>{msg}</div>}
@@ -77,7 +72,7 @@ export default function Scanner() {
               <tr>
                 <th></th><th>Strategy</th><th>Category</th><th>TF</th><th>Symbol</th><th>Signal</th>
                 <th>Bars</th><th>Weight</th><th>Close</th><th>As of</th>
-                {exec.configured && <th></th>}
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -93,19 +88,17 @@ export default function Scanner() {
                   <td>{fmt(r.weight)}</td>
                   <td>{fmt(r.close)}</td>
                   <td className="muted">{fmtDateTime(r.date)}</td>
-                  {exec.configured && (
-                    <td>
-                      {r.signal !== "FLAT" && (
-                        <button
-                          className="secondary"
-                          disabled={sending === `${r.strategy}|${r.symbol}`}
-                          onClick={() => forward(r)}
-                        >
-                          {sending === `${r.strategy}|${r.symbol}` ? "Sending…" : "Forward"}
-                        </button>
-                      )}
-                    </td>
-                  )}
+                  <td>
+                    {r.signal !== "FLAT" && (
+                      <button
+                        className="secondary"
+                        disabled={sending === `${r.strategy}|${r.symbol}`}
+                        onClick={() => forward(r)}
+                      >
+                        {sending === `${r.strategy}|${r.symbol}` ? "Sending…" : "Forward"}
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

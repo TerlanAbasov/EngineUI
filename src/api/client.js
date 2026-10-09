@@ -140,7 +140,6 @@ export const api = {
   // { quantity, orderType: "MKT"|"LMT", tif: "DAY"|"GTC", strategyNames, symbols, maxCommandsPerRun } — the switch is left as it is
   saveAutoTradeSettings: (settings) => req("/autotrade/settings", { method: "PUT", body: JSON.stringify(settings) }),
   autoTradeCommands: (page = 0, size = 50) => req(`/autotrade/commands?page=${page}&size=${size}`),
-  // The Scanner's "Forward" button: one signal, now, with the saved quantity. executionStatus says whether ExecutionEngine is configured.
-  executionStatus: () => req("/autotrade/status"),
+  // The Scanner's "Forward" button: one signal, now, with the saved quantity.
   sendSignal: (signal) => req("/autotrade/forward", { method: "POST", body: JSON.stringify(signal) }),
 };
