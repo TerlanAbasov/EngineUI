@@ -49,13 +49,13 @@ const ICONS = {
 
 // [id, label, group] — group renders as a small heading above the first tab in it.
 const TABS = [
+  ["autotrade", "Auto Trading", "Live trading"],
+  ["execution", "Execution", "Live trading"],
   ["backtest", "Backtest", "Research"],
   ["chart", "Chart", "Research"],
   ["strategies", "Strategies", "Research"],
   ["universe", "Universe", "Research"],
   ["scanner", "Scanner", "Research"],
-  ["autotrade", "Auto Trading", "Live trading"],
-  ["execution", "Execution", "Live trading"],
 ];
 
 export default function App() {
