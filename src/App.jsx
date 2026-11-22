@@ -59,7 +59,7 @@ const TABS = [
 ];
 
 export default function App() {
-  const [tab, setTab] = useState("backtest");
+  const [tab, setTab] = useState("autotrade");
   const [source, setSource] = useState(null);
   const { job, running, pendingOutcome } = useBacktestJob();
 
