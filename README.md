@@ -14,7 +14,7 @@ Vite proxies `/api` to `http://localhost:8082` (see `vite.config.js`), so start 
 backend first. To point at a different backend, set `VITE_API_BASE`.
 
 It also proxies `/exec-api` to `http://localhost:8081` — the **ExecutionEngine**
-paper-trading order execution service (a separate repo/process) used by the
+paper-trading order execution service (a separate repo and process) used by the
 **Execution** tab. Set `VITE_EXEC_API_BASE` to point that at a different host.
 
 ```bash
